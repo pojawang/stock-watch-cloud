@@ -95,6 +95,22 @@ function avg(values) {
   return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : 0;
 }
 
+function formatDateTime(value) {
+  return new Date(value).toLocaleString("zh-TW", { hour12: false });
+}
+
+function marketStatusText(updatedAt) {
+  const now = updatedAt ? new Date(updatedAt) : new Date();
+  const day = now.getDay();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const open = 9 * 60;
+  const close = 13 * 60 + 30;
+  if (day === 0 || day === 6) return "休市日，顯示最近可取得行情";
+  if (minutes < open) return "盤前，顯示最近可取得行情";
+  if (minutes <= close) return "盤中更新中";
+  return "已收盤，顯示今日收盤行情";
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -153,8 +169,9 @@ function renderSettings() {
 
 function renderQuotes(payload) {
   state.quotes = payload.quotes || [];
-  els.quoteMeta.textContent = payload.ok ? `更新時間 ${new Date(payload.updatedAt).toLocaleString("zh-TW", { hour12: false })}` : `資料來源暫時失敗，顯示快取資料`;
-  setStatus(payload.ok ? "行情已更新" : payload.error, !payload.ok);
+  const marketText = marketStatusText(payload.updatedAt);
+  els.quoteMeta.textContent = payload.ok ? `資料刷新時間 ${formatDateTime(payload.updatedAt)}` : `資料來源暫時失敗，顯示快取資料`;
+  setStatus(payload.ok ? marketText : `資料來源暫時失敗：${payload.error || "顯示快取資料"}`, !payload.ok);
   els.quotesBody.innerHTML = "";
   state.quotes.forEach((quote) => {
     const trend = trendClass(quote.change);

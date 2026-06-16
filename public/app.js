@@ -111,6 +111,13 @@ function marketStatusText(updatedAt) {
   return "已收盤，顯示今日收盤行情";
 }
 
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -139,6 +146,7 @@ function showApp(user) {
   els.appMain.classList.remove("hidden");
   els.userBadge.textContent = `${user.displayName || user.username} / ${user.role === "admin" ? "管理員" : "使用者"}`;
   els.usersToggle.classList.toggle("hidden", user.role !== "admin");
+  if (user.role !== "admin") els.usersPanel.classList.add("hidden");
 }
 
 function setStatus(text, warn = false) {
@@ -158,6 +166,20 @@ function rowsForSymbol(symbol) {
       return { date: snapshot.date, close: Number(quote.price), volume: Number(quote.volume || 0) };
     })
     .filter(Boolean);
+}
+
+function shiftedWeekRows(symbol) {
+  const rows = rowsForSymbol(symbol);
+  const today = new Date();
+  const end = new Date(today);
+  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() - 7);
+  const start = new Date(end);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 6);
+  const startKey = localDateKey(start);
+  const endKey = localDateKey(end);
+  return rows.filter((row) => row.date >= startKey && row.date <= endKey).slice(-7);
 }
 
 function renderSettings() {
@@ -206,14 +228,14 @@ function renderMetrics(alerts) {
 }
 
 function drawHistoryChart() {
-  const rows = rowsForSymbol(selectedSymbol()).slice(-14);
+  const rows = shiftedWeekRows(selectedSymbol());
   const canvas = els.historyChart;
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
   if (!rows.length) {
-    els.chartEmpty.textContent = "目前還沒有歷史資料，請按立即刷新建立快照。";
+    els.chartEmpty.textContent = "往前推一週的區間目前沒有資料，請等待排程累積或手動刷新建立快照。";
     return;
   }
   els.chartEmpty.textContent = "";
@@ -321,7 +343,7 @@ function drawRadar(values) {
 function renderDashboard() {
   const valid = state.quotes.filter((quote) => quote.status === "ok");
   const selected = state.quotes.find((quote) => quote.symbol === selectedSymbol()) || valid[0] || {};
-  const selectedRows = rowsForSymbol(selected.symbol).slice(-14);
+  const selectedRows = shiftedWeekRows(selected.symbol);
   const changes = valid.map((quote) => Number(quote.changePercent || 0));
   const avgChange = avg(changes);
   const selectedChange = Number(selected.changePercent || 0);
@@ -467,6 +489,10 @@ els.refreshBtn.addEventListener("click", async () => {
 
 els.settingsToggle.addEventListener("click", () => els.settingsPanel.classList.toggle("hidden"));
 els.usersToggle.addEventListener("click", async () => {
+  if (!state.user || state.user.role !== "admin") {
+    els.usersPanel.classList.add("hidden");
+    return;
+  }
   els.usersPanel.classList.toggle("hidden");
   if (!els.usersPanel.classList.contains("hidden")) await loadUsers();
 });

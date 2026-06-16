@@ -12,6 +12,7 @@
 }
 
 * { box-sizing: border-box; }
+html { max-width: 100%; overflow-x: hidden; }
 body {
   margin: 0;
   background:
@@ -20,6 +21,8 @@ body {
     var(--bg);
   color: var(--text);
   font-family: "Microsoft JhengHei", "Segoe UI", Arial, sans-serif;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 h1, h2, h3, p { margin: 0; }
 h1, .aiBoardTitle h2 { color: #9fd4ff; text-shadow: 0 0 10px rgba(91, 184, 255, 0.75); }
@@ -140,8 +143,33 @@ canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6p
   .aiTile.wide { grid-column: span 2; }
 }
 @media (max-width: 760px) {
-  .topbar, .panelHead, .aiBoardTitle { align-items: flex-start; flex-direction: column; }
-  main { width: calc(100% - 20px); }
+  .loginView { min-height: 100svh; align-items: start; padding: 16px 12px; }
+  .loginCard { width: 100%; margin-top: 24px; padding: 20px; }
+  .loginCard h1, .topbar h1 { font-size: 28px; line-height: 1.25; }
+  .topbar {
+    position: static;
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px 12px;
+  }
+  .topbar .actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .topbar .actions button,
+  .topbar .actions .userBadge {
+    width: 100%;
+    text-align: center;
+  }
+  .topbar .actions .userBadge { grid-column: 1 / -1; }
+  .panelHead, .aiBoardTitle { align-items: flex-start; flex-direction: column; }
+  main { width: calc(100% - 16px); margin-top: 12px; }
+  .panel { padding: 14px; overflow: hidden; }
+  .tableWrap { width: 100%; overflow-x: auto; }
+  table { min-width: 760px; }
   .metricGrid, .dashboardGrid, .aiGrid, .userForm, .userRow { grid-template-columns: 1fr; }
+  .userActions { justify-content: flex-start; }
   .aiTile.wide { grid-column: span 1; }
 }

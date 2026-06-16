@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>台股 AI 監看平台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <section id="loginView" class="loginView">
+    <form id="loginForm" class="loginCard">
+      <h1>台股 AI 監看平台</h1>
+      <p>請登入後使用個人儀表板</p>
+      <label>帳號<input id="loginUsername" autocomplete="username" required></label>
+      <label>密碼<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">登入</button>
+      <p id="loginMessage" class="message"></p>
+    </form>
+  </section>
+
+  <header id="appHeader" class="topbar hidden">
+    <div>
+      <h1>台股 AI 監看平台</h1>
+      <p id="statusText">儀表板準備中</p>
+    </div>
+    <div class="actions">
+      <span id="userBadge" class="userBadge">-</span>
+      <button id="refreshBtn" class="primary">立即刷新</button>
+      <button id="settingsToggle">我的股票</button>
+      <button id="usersToggle" class="hidden">帳號管理</button>
+      <button id="logoutBtn">登出</button>
+    </div>
+  </header>
+
+  <main id="appMain" class="hidden">
+    <section id="settingsPanel" class="panel hidden">
+      <div class="panelHead">
+        <h2>我的 10 檔股票</h2>
+        <span>每個使用者都有自己的清單</span>
+      </div>
+      <textarea id="symbolsInput" rows="3" spellcheck="false"></textarea>
+      <div class="actions">
+        <button id="saveSettingsBtn" class="primary">儲存清單</button>
+      </div>
+      <p id="settingsMessage" class="message"></p>
+    </section>
+
+    <section id="usersPanel" class="panel hidden">
+      <div class="panelHead">
+        <h2>帳號管理</h2>
+        <span>管理員可新增、停用或刪除使用者</span>
+      </div>
+      <form id="userForm" class="userForm">
+        <input id="newUsername" placeholder="帳號">
+        <input id="newDisplayName" placeholder="名稱">
+        <input id="newPassword" type="password" placeholder="密碼至少 6 碼">
+        <select id="newRole">
+          <option value="user">一般使用者</option>
+          <option value="admin">管理員</option>
+        </select>
+        <button class="primary" type="submit">新增帳號</button>
+      </form>
+      <div id="usersList" class="usersList"></div>
+      <p id="usersMessage" class="message"></p>
+    </section>
+
+    <section class="metricGrid">
+      <article class="metric"><span>監看檔數</span><strong id="metricCount">-</strong></article>
+      <article class="metric"><span>上漲家數</span><strong id="metricAdvancers">-</strong></article>
+      <article class="metric"><span>平均漲跌</span><strong id="metricAverage">-</strong></article>
+      <article class="metric"><span>警示數</span><strong id="metricAlerts">-</strong></article>
+    </section>
+
+    <section class="panel">
+      <div class="panelHead">
+        <h2>10 檔即時報價表</h2>
+        <span id="quoteMeta">尚未更新</span>
+      </div>
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr><th>代號</th><th>名稱</th><th>市場</th><th>成交價</th><th>漲跌</th><th>漲跌幅</th><th>成交量</th><th>最後成交時間</th></tr>
+          </thead>
+          <tbody id="quotesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="dashboardGrid">
+      <article class="panel">
+        <div class="panelHead">
+          <h2>最近一週變化</h2>
+          <select id="chartSymbol"></select>
+        </div>
+        <canvas id="historyChart" width="980" height="360"></canvas>
+        <p id="chartEmpty" class="message"></p>
+      </article>
+      <article class="panel">
+        <div class="panelHead">
+          <h2>AI 摘要</h2>
+          <span>規則式分析</span>
+        </div>
+        <div id="summaryBox" class="summaryBox"></div>
+      </article>
+    </section>
+
+    <section class="aiBoard">
+      <div class="aiBoardTitle">
+        <div>
+          <h2>全方位 AI 股票分析儀表板</h2>
+          <p>規則式主力行為判讀系統</p>
+        </div>
+        <div class="aiBoardMeta">
+          <span id="boardDate">-</span>
+          <span id="boardTime">-</span>
+        </div>
+      </div>
+      <div class="aiGrid">
+        <article class="aiTile"><div class="tileNo">1</div><h3>AI 主力意圖分析圖</h3><div id="intentBars" class="signalBars"></div><div id="intentConclusion" class="tileConclusion"></div></article>
+        <article class="aiTile"><div class="tileNo">2</div><h3>隔日沖風險分析圖</h3><div id="riskBars" class="signalBars"></div><div class="riskNumber"><span id="riskScore">-</span><small>%</small></div></article>
+        <article class="aiTile"><div class="tileNo">3</div><h3>飆股雷達圖</h3><canvas id="radarChart" width="360" height="240"></canvas><div id="radarSummary" class="tileConclusion"></div></article>
+        <article class="aiTile"><div class="tileNo">4</div><h3>明日劇本推演圖</h3><div id="scenarioList" class="scenarioList"></div></article>
+        <article class="aiTile"><div class="tileNo">5</div><h3>AI 多空能量條</h3><div id="energyBars" class="signalBars"></div><div id="energyText" class="miniText"></div></article>
+        <article class="aiTile"><div class="tileNo">6</div><h3>主力成本線分析圖</h3><canvas id="costChart" width="360" height="240"></canvas><div id="costText" class="miniText"></div></article>
+        <article class="aiTile"><div class="tileNo">7</div><h3>AI 籌碼熱區圖</h3><div id="volumeProfile" class="volumeProfile"></div></article>
+        <article class="aiTile"><div class="tileNo">8</div><h3>個股健康度儀表板</h3><div id="healthGauges" class="gaugeGrid"></div></article>
+        <article class="aiTile"><div class="tileNo">9</div><h3>AI 飆股預警燈號系統</h3><div id="trafficLights" class="trafficList"></div></article>
+        <article class="aiTile"><div class="tileNo">10</div><h3>類神經 AI 預測路徑圖</h3><canvas id="predictionChart" width="360" height="240"></canvas></article>
+        <article class="aiTile"><div class="tileNo">11</div><h3>台股情緒指數圖</h3><div class="sentimentGauge"><div id="sentimentNeedle" class="sentimentNeedle"></div><strong id="sentimentLabel">-</strong><span id="sentimentScore">-/100</span></div></article>
+        <article class="aiTile wide"><div class="tileNo">12</div><h3>AI 總結與投資建議</h3><div id="finalAdvice" class="finalAdvice"></div></article>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

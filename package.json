@@ -1,0 +1,15 @@
+{
+  "name": "stock-watch-cloud",
+  "version": "1.0.0",
+  "description": "Multi-user Taiwan stock dashboard for Netlify and Supabase deployment.",
+  "main": "netlify/functions/api.js",
+  "scripts": {
+    "check": "node --check netlify/functions/api.js && node --check netlify/functions/scheduled-refresh.js && node --check src/supabase.js && node --check src/auth-supabase.js && node --check src/stocks.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}

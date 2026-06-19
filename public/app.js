@@ -182,6 +182,30 @@ function shiftedWeekRows(symbol) {
   return rows.filter((row) => row.date >= startKey && row.date <= endKey).slice(-7);
 }
 
+function syntheticRowsFromQuote(quote) {
+  if (!quote || !Number.isFinite(Number(quote.price))) return [];
+  const price = Number(quote.price);
+  const previous = Number.isFinite(Number(quote.previousClose)) ? Number(quote.previousClose) : price;
+  const date = quote.tradeDate || localDateKey(new Date());
+  return [
+    { date: "前收", close: previous, volume: 0 },
+    { date, close: price, volume: Number(quote.volume || 0) },
+  ];
+}
+
+function chartRowsForSymbol(symbol, quote) {
+  const shifted = shiftedWeekRows(symbol);
+  if (shifted.length) return { rows: shifted, source: "shifted" };
+  const recent = rowsForSymbol(symbol).slice(-7);
+  if (recent.length) return { rows: recent, source: "recent" };
+  return { rows: syntheticRowsFromQuote(quote), source: "quote" };
+}
+
+function chartLabel(date) {
+  return String(date || "").includes("-") ? String(date).slice(5) : String(date || "");
+}
+
+
 function renderSettings() {
   els.symbolsInput.value = state.symbols.join(", ");
   const current = els.chartSymbol.value;
@@ -228,7 +252,9 @@ function renderMetrics(alerts) {
 }
 
 function drawHistoryChart() {
-  const rows = shiftedWeekRows(selectedSymbol());
+  const symbol = selectedSymbol();
+  const quote = state.quotes.find((item) => item.symbol === symbol);
+  const { rows, source } = chartRowsForSymbol(symbol, quote);
   const canvas = els.historyChart;
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
@@ -238,8 +264,10 @@ function drawHistoryChart() {
     els.chartEmpty.textContent = "往前推一週的區間目前沒有資料，請等待排程累積或手動刷新建立快照。";
     return;
   }
-  els.chartEmpty.textContent = "";
-  drawLine(ctx, width, height, rows.map((row) => row.close), rows.map((row) => row.date.slice(5)), "#52c8ff", true);
+  els.chartEmpty.textContent = source === "shifted" ? "" : source === "recent"
+    ? "尚未累積往前一週快照，暫以最近可用資料顯示。"
+    : "尚未累積歷史快照，暫以今日報價與前收估算顯示。";
+  drawLine(ctx, width, height, rows.map((row) => row.close), rows.map((row) => chartLabel(row.date)), "#52c8ff", true);
 }
 
 function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", showLabels = false, predict = false) {
@@ -249,6 +277,8 @@ function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", sh
   if (predict && list.length > 1) {
     const momentum = list[list.length - 1] - list[list.length - 2];
     extended.push(list[list.length - 1] + momentum * 0.6, list[list.length - 1] + momentum);
+  } else if (predict && list.length === 1) {
+    extended.push(list[0] * 1.005, list[0] * 0.995);
   }
   let min = Math.min(...extended);
   let max = Math.max(...extended);
@@ -343,7 +373,8 @@ function drawRadar(values) {
 function renderDashboard() {
   const valid = state.quotes.filter((quote) => quote.status === "ok");
   const selected = state.quotes.find((quote) => quote.symbol === selectedSymbol()) || valid[0] || {};
-  const selectedRows = shiftedWeekRows(selected.symbol);
+  const selectedChart = chartRowsForSymbol(selected.symbol, selected);
+  const selectedRows = selectedChart.rows;
   const changes = valid.map((quote) => Number(quote.changePercent || 0));
   const avgChange = avg(changes);
   const selectedChange = Number(selected.changePercent || 0);
@@ -390,7 +421,8 @@ function renderDashboard() {
   const costCtx = els.costChart.getContext("2d");
   costCtx.clearRect(0, 0, els.costChart.width, els.costChart.height);
   drawLine(costCtx, els.costChart.width, els.costChart.height, closeValues, [], "#ff3333");
-  els.costText.textContent = closeValues.length ? `估算成本區 ${fmt(Math.min(...closeValues))} - ${fmt(Math.max(...closeValues))}；目前價 ${fmt(selected.price)}。` : "尚無足夠資料。";
+  const costPrefix = selectedChart.source === "shifted" ? "往前一週" : selectedChart.source === "recent" ? "最近可用" : "今日估算";
+  els.costText.textContent = closeValues.length ? `${costPrefix}成本區 ${fmt(Math.min(...closeValues))} - ${fmt(Math.max(...closeValues))}；目前價 ${fmt(selected.price)}。` : "尚無足夠資料。";
   els.volumeProfile.innerHTML = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 10).map((quote) => {
     const width = clamp((Number(quote.volume || 0) / maxVolume) * 100, 4, 100);
     return `<div class="profileRow"><span>${quote.symbol}</span><div class="profileBar" style="width:${width}%"></div><strong>${intFmt(quote.volume)}</strong></div>`;

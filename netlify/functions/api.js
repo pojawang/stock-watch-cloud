@@ -12,7 +12,7 @@ const {
   clearCookie,
   json,
 } = require("../../src/auth-supabase");
-const { normalizeSymbols, fetchRealtimeQuotes, buildRuleSummary } = require("../../src/stocks");
+const { normalizeSymbols, fetchRealtimeQuotes, fetchHistoricalSeries, buildRuleSummary } = require("../../src/stocks");
 
 const DEFAULT_SYMBOLS = ["2330", "2317", "0050", "2454", "2412", "2308", "2882", "3231", "3711", "3008"];
 
@@ -131,6 +131,7 @@ async function quotesForUser(userId, save) {
 }
 
 async function historyForUser(userId) {
+  const symbols = await ensureUserStocks(userId);
   const since = new Date(Date.now() - 14 * 86400 * 1000).toISOString().slice(0, 10);
   const { data, error } = await getSupabase()
     .from("quote_snapshots")
@@ -149,7 +150,38 @@ async function historyForUser(userId) {
     if (index >= 0) snapshot.quotes[index] = quote;
     else snapshot.quotes.push(quote);
   });
-  return { snapshots: [...byDate.values()] };
+
+  const marketHints = {};
+  data.forEach((row) => { if (row.market) marketHints[row.symbol] = row.market; });
+  const historical = await fetchHistoricalSeries(symbols, marketHints);
+  Object.entries(historical).forEach(([symbol, rows]) => {
+    rows.forEach((row) => {
+      if (!byDate.has(row.date)) byDate.set(row.date, { date: row.date, quotes: [] });
+      const snapshot = byDate.get(row.date);
+      if (snapshot.quotes.some((item) => item.symbol === symbol)) return;
+      snapshot.quotes.push({
+        symbol,
+        market: row.market,
+        name: "",
+        price: row.close,
+        previousClose: null,
+        change: null,
+        changePercent: null,
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        volume: row.volume,
+        tradeTime: "13:30:00",
+        tradeDate: row.date,
+        source: row.source,
+        status: "ok",
+      });
+    });
+  });
+  return {
+    snapshots: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    historicalSource: "daily-history-with-snapshot-fallback",
+  };
 }
 
 async function handler(event) {
@@ -271,7 +303,7 @@ async function handler(event) {
   if (method === "GET" && path === "/history") {
     const auth = await requireUser(event);
     if (auth.response) return auth.response;
-    return json(200, await historyForUser(auth.user.id));
+    return json(200, await historyForUser(auth.user.id), { "Cache-Control": "private, max-age=300" });
   }
 
   return json(404, { ok: false, error: "找不到 API。" });

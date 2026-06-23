@@ -27,6 +27,76 @@ function formatTradeDate(value) {
   return new Date().toISOString().slice(0, 10);
 }
 
+function taipeiDateKey(timestamp) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(timestamp * 1000));
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+async function fetchYahooHistory(symbol, suffix) {
+  const ticker = `${symbol}.${suffix}`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1mo&interval=1d&events=history`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+  let rejectTimeout;
+  let response;
+  try {
+    response = await Promise.race([
+      fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 StockWatchCloud/1.0" },
+        signal: controller.signal,
+      }),
+      new Promise((_, reject) => {
+        rejectTimeout = setTimeout(() => reject(new Error("Historical quote timeout")), 2700);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+    clearTimeout(rejectTimeout);
+  }
+  if (!response.ok) return [];
+  const payload = await response.json();
+  const result = payload?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const quote = result?.indicators?.quote?.[0] || {};
+  const adjusted = result?.indicators?.adjclose?.[0]?.adjclose || [];
+  return timestamps.map((timestamp, index) => {
+    const close = toNumber(adjusted[index] ?? quote.close?.[index]);
+    if (close === null) return null;
+    return {
+      date: taipeiDateKey(timestamp),
+      close,
+      open: toNumber(quote.open?.[index]),
+      high: toNumber(quote.high?.[index]),
+      low: toNumber(quote.low?.[index]),
+      volume: toNumber(quote.volume?.[index]) || 0,
+      market: suffix === "TWO" ? "TPEx" : "TWSE",
+      source: "Yahoo Finance history",
+    };
+  }).filter(Boolean);
+}
+
+async function fetchHistoricalSeries(symbols, marketHints = {}) {
+  const cleanSymbols = normalizeSymbols(symbols);
+  const entries = await Promise.all(cleanSymbols.map(async (symbol) => {
+    const preferred = marketHints[symbol] === "TPEx" ? "TWO" : "TW";
+    const alternate = preferred === "TW" ? "TWO" : "TW";
+    try {
+      let rows = await fetchYahooHistory(symbol, preferred);
+      if (!rows.length) rows = await fetchYahooHistory(symbol, alternate);
+      return [symbol, rows.slice(-20)];
+    } catch (_) {
+      return [symbol, []];
+    }
+  }));
+  return Object.fromEntries(entries);
+}
+
 async function fetchRealtimeQuotes(symbols) {
   const cleanSymbols = normalizeSymbols(symbols);
   if (!cleanSymbols.length) return [];
@@ -127,5 +197,6 @@ function buildRuleSummary(quotes) {
 module.exports = {
   normalizeSymbols,
   fetchRealtimeQuotes,
+  fetchHistoricalSeries,
   buildRuleSummary,
 };

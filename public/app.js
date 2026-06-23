@@ -159,13 +159,17 @@ function selectedSymbol() {
 }
 
 function rowsForSymbol(symbol) {
-  return (state.history.snapshots || [])
+  const rows = (state.history.snapshots || [])
     .map((snapshot) => {
       const quote = (snapshot.quotes || []).find((item) => item.symbol === symbol);
       if (!quote || quote.price === null) return null;
       return { date: snapshot.date, close: Number(quote.price), volume: Number(quote.volume || 0) };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const byDate = new Map();
+  rows.forEach((row) => byDate.set(row.date, row));
+  return [...byDate.values()];
 }
 
 function shiftedWeekRows(symbol) {
@@ -195,9 +199,9 @@ function syntheticRowsFromQuote(quote) {
 
 function chartRowsForSymbol(symbol, quote) {
   const shifted = shiftedWeekRows(symbol);
-  if (shifted.length) return { rows: shifted, source: "shifted" };
+  if (shifted.length >= 2) return { rows: shifted, source: "shifted" };
   const recent = rowsForSymbol(symbol).slice(-7);
-  if (recent.length) return { rows: recent, source: "recent" };
+  if (recent.length >= 2) return { rows: recent, source: "recent" };
   return { rows: syntheticRowsFromQuote(quote), source: "quote" };
 }
 
@@ -420,7 +424,7 @@ function renderDashboard() {
   const closeValues = selectedRows.map((row) => row.close);
   const costCtx = els.costChart.getContext("2d");
   costCtx.clearRect(0, 0, els.costChart.width, els.costChart.height);
-  drawLine(costCtx, els.costChart.width, els.costChart.height, closeValues, [], "#ff3333");
+  drawLine(costCtx, els.costChart.width, els.costChart.height, closeValues, selectedRows.map((row) => chartLabel(row.date)), "#ff3333", true);
   const costPrefix = selectedChart.source === "shifted" ? "往前一週" : selectedChart.source === "recent" ? "最近可用" : "今日估算";
   els.costText.textContent = closeValues.length ? `${costPrefix}成本區 ${fmt(Math.min(...closeValues))} - ${fmt(Math.max(...closeValues))}；目前價 ${fmt(selected.price)}。` : "尚無足夠資料。";
   els.volumeProfile.innerHTML = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 10).map((quote) => {
@@ -437,7 +441,7 @@ function renderDashboard() {
   `;
   const predCtx = els.predictionChart.getContext("2d");
   predCtx.clearRect(0, 0, els.predictionChart.width, els.predictionChart.height);
-  drawLine(predCtx, els.predictionChart.width, els.predictionChart.height, closeValues, [], "#ffd84d", false, true);
+  drawLine(predCtx, els.predictionChart.width, els.predictionChart.height, closeValues, selectedRows.map((row) => chartLabel(row.date)), "#ffd84d", true, true);
   const sentiment = Math.round(clamp(avg([trend, flow, focus, 100 - risk]), 0, 100));
   els.sentimentNeedle.style.transform = `rotate(${(sentiment / 100) * 180 - 90}deg)`;
   els.sentimentLabel.textContent = sentiment > 70 ? "貪婪" : sentiment < 35 ? "恐懼" : "中性";
@@ -456,7 +460,7 @@ async function loadSettings() {
 }
 
 async function loadHistory() {
-  state.history = await api("/api/history");
+  state.history = await api("/api/history?historyVersion=2");
 }
 
 async function refresh(save = false) {

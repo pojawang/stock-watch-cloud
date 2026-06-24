@@ -183,7 +183,9 @@ function shiftedWeekRows(symbol) {
   start.setDate(start.getDate() - 6);
   const startKey = localDateKey(start);
   const endKey = localDateKey(end);
-  return rows.filter((row) => row.date >= startKey && row.date <= endKey).slice(-7);
+  const exactWindow = rows.filter((row) => row.date >= startKey && row.date <= endKey).slice(-7);
+  if (exactWindow.length >= 4) return exactWindow;
+  return rows.filter((row) => row.date <= endKey).slice(-7);
 }
 
 function syntheticRowsFromQuote(quote) {
@@ -199,10 +201,18 @@ function syntheticRowsFromQuote(quote) {
 
 function chartRowsForSymbol(symbol, quote) {
   const shifted = shiftedWeekRows(symbol);
-  if (shifted.length >= 2) return { rows: shifted, source: "shifted" };
+  if (shifted.length >= 4) return { rows: shifted, source: "shifted" };
   const recent = rowsForSymbol(symbol).slice(-7);
-  if (recent.length >= 2) return { rows: recent, source: "recent" };
+  if (recent.length >= 4) return { rows: recent, source: "recent" };
   return { rows: syntheticRowsFromQuote(quote), source: "quote" };
+}
+
+function weightedCostValues(rows) {
+  return rows.map((_, index) => {
+    const windowRows = rows.slice(Math.max(0, index - 2), index + 1);
+    const totalVolume = windowRows.reduce((sum, row) => sum + Math.max(1, Number(row.volume || 0)), 0);
+    return windowRows.reduce((sum, row) => sum + Number(row.close) * Math.max(1, Number(row.volume || 0)), 0) / totalVolume;
+  });
 }
 
 function chartLabel(date) {
@@ -278,9 +288,16 @@ function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", sh
   const list = values.filter((value) => Number.isFinite(value));
   if (!list.length) return;
   const extended = [...list];
+  const actualCount = list.length;
   if (predict && list.length > 1) {
-    const momentum = list[list.length - 1] - list[list.length - 2];
-    extended.push(list[list.length - 1] + momentum * 0.6, list[list.length - 1] + momentum);
+    const sample = list.slice(-Math.min(5, list.length));
+    const xMean = (sample.length - 1) / 2;
+    const yMean = sample.reduce((sum, value) => sum + value, 0) / sample.length;
+    const denominator = sample.reduce((sum, _, index) => sum + (index - xMean) ** 2, 0) || 1;
+    const rawSlope = sample.reduce((sum, value, index) => sum + (index - xMean) * (value - yMean), 0) / denominator;
+    const last = list[list.length - 1];
+    const slope = clamp(rawSlope, -last * 0.03, last * 0.03);
+    extended.push(last + slope, last + slope * 2, last + slope * 3);
   } else if (predict && list.length === 1) {
     extended.push(list[0] * 1.005, list[0] * 0.995);
   }
@@ -301,7 +318,7 @@ function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", sh
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y); ctx.stroke();
   }
   ctx.beginPath();
-  extended.forEach((value, index) => {
+  list.forEach((value, index) => {
     const x = xFor(index);
     const y = yFor(value);
     if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -312,6 +329,19 @@ function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", sh
   ctx.shadowBlur = 10;
   ctx.stroke();
   ctx.shadowBlur = 0;
+  if (predict && extended.length > actualCount) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(xFor(actualCount - 1), yFor(extended[actualCount - 1]));
+    extended.slice(actualCount).forEach((value, offset) => {
+      ctx.lineTo(xFor(actualCount + offset), yFor(value));
+    });
+    ctx.strokeStyle = "#ffd84d";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.stroke();
+    ctx.restore();
+  }
   list.forEach((value, index) => {
     ctx.beginPath();
     ctx.fillStyle = index === list.length - 1 ? "#ffd84d" : "#d9ecff";
@@ -321,8 +351,9 @@ function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", sh
   if (showLabels) {
     ctx.textAlign = "center";
     ctx.fillStyle = "#8cc9f7";
-    labels.forEach((label, index) => {
-      if (index % Math.ceil(labels.length / 7) === 0 || index === labels.length - 1) ctx.fillText(label, xFor(index), height - pad.bottom + 18);
+    const displayLabels = predict ? [...labels, "+1", "+2", "+3"] : labels;
+    displayLabels.forEach((label, index) => {
+      if (index % Math.ceil(displayLabels.length / 7) === 0 || index === displayLabels.length - 1) ctx.fillText(label, xFor(index), height - pad.bottom + 18);
     });
   }
 }
@@ -422,11 +453,12 @@ function renderDashboard() {
   renderBars(els.energyBars, [{ label: "多方能量", value: bull, tag: `${Math.round(bull)}%` }, { label: "空方能量", value: 100 - bull, tag: `${Math.round(100 - bull)}%` }]);
   els.energyText.textContent = `趨勢 ${Math.round(trend)} / 量能 ${Math.round(volume)} / 流向 ${Math.round(flow)}`;
   const closeValues = selectedRows.map((row) => row.close);
+  const costValues = weightedCostValues(selectedRows);
   const costCtx = els.costChart.getContext("2d");
   costCtx.clearRect(0, 0, els.costChart.width, els.costChart.height);
-  drawLine(costCtx, els.costChart.width, els.costChart.height, closeValues, selectedRows.map((row) => chartLabel(row.date)), "#ff3333", true);
+  drawLine(costCtx, els.costChart.width, els.costChart.height, costValues, selectedRows.map((row) => chartLabel(row.date)), "#ff3333", true);
   const costPrefix = selectedChart.source === "shifted" ? "往前一週" : selectedChart.source === "recent" ? "最近可用" : "今日估算";
-  els.costText.textContent = closeValues.length ? `${costPrefix}成本區 ${fmt(Math.min(...closeValues))} - ${fmt(Math.max(...closeValues))}；目前價 ${fmt(selected.price)}。` : "尚無足夠資料。";
+  els.costText.textContent = costValues.length ? `${costPrefix}成交量加權成本區 ${fmt(Math.min(...costValues))} - ${fmt(Math.max(...costValues))}；目前價 ${fmt(selected.price)}。` : "尚無足夠資料。";
   els.volumeProfile.innerHTML = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 10).map((quote) => {
     const width = clamp((Number(quote.volume || 0) / maxVolume) * 100, 4, 100);
     return `<div class="profileRow"><span>${quote.symbol}</span><div class="profileBar" style="width:${width}%"></div><strong>${intFmt(quote.volume)}</strong></div>`;
@@ -460,7 +492,7 @@ async function loadSettings() {
 }
 
 async function loadHistory() {
-  state.history = await api("/api/history?historyVersion=2");
+  state.history = await api("/api/history?historyVersion=3");
 }
 
 async function refresh(save = false) {

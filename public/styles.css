@@ -87,6 +87,15 @@ main { width: min(1440px, calc(100% - 32px)); margin: 18px auto 48px; display: g
 .metric span { color: var(--muted); font-size: 13px; }
 .metric strong { color: var(--yellow); font-size: 28px; text-shadow: 0 0 10px rgba(255, 216, 77, 0.35); }
 .dashboardGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.7fr); gap: 18px; }
+.chartControls { display: flex; gap: 8px; align-items: center; }
+.singleStockPanel .panelHead > div:first-child { display: grid; gap: 5px; }
+.singleStockStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.singleStockStat { min-width: 0; padding: 10px 12px; border: 1px solid rgba(27, 117, 188, 0.55); border-radius: 6px; background: rgba(7, 19, 31, 0.72); }
+.singleStockStat span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+.singleStockStat strong { display: block; overflow-wrap: anywhere; color: var(--yellow); font-size: 18px; }
+.singleStockStat strong.up { color: var(--red); }
+.singleStockStat strong.down { color: var(--green); }
+.singleStockPanel canvas { aspect-ratio: 20 / 7; }
 .tableWrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; min-width: 840px; }
 th, td { padding: 12px 10px; border-bottom: 1px solid rgba(27, 117, 188, 0.55); text-align: right; white-space: nowrap; }
@@ -165,6 +174,10 @@ canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6p
   }
   .topbar .actions .userBadge { grid-column: 1 / -1; }
   .panelHead, .aiBoardTitle { align-items: flex-start; flex-direction: column; }
+  .chartControls { width: 100%; display: grid; grid-template-columns: 1fr; }
+  .chartControls select { width: 100%; }
+  .singleStockStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .singleStockPanel canvas { min-height: 260px; aspect-ratio: auto; }
   main { width: calc(100% - 16px); margin-top: 12px; }
   .panel { padding: 14px; overflow: hidden; }
   .tableWrap { width: 100%; overflow-x: auto; }

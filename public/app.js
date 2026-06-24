@@ -43,6 +43,12 @@ const els = {
   chartSymbol: $("#chartSymbol"),
   historyChart: $("#historyChart"),
   chartEmpty: $("#chartEmpty"),
+  singleStockSymbol: $("#singleStockSymbol"),
+  singleStockRange: $("#singleStockRange"),
+  singleStockName: $("#singleStockName"),
+  singleStockStats: $("#singleStockStats"),
+  singleStockChart: $("#singleStockChart"),
+  singleStockMessage: $("#singleStockMessage"),
   summaryBox: $("#summaryBox"),
   boardDate: $("#boardDate"),
   boardTime: $("#boardTime"),
@@ -223,8 +229,11 @@ function chartLabel(date) {
 function renderSettings() {
   els.symbolsInput.value = state.symbols.join(", ");
   const current = els.chartSymbol.value;
+  const currentSingle = els.singleStockSymbol.value;
   els.chartSymbol.innerHTML = state.symbols.map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("");
+  els.singleStockSymbol.innerHTML = state.symbols.map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("");
   if (state.symbols.includes(current)) els.chartSymbol.value = current;
+  if (state.symbols.includes(currentSingle)) els.singleStockSymbol.value = currentSingle;
 }
 
 function renderQuotes(payload) {
@@ -358,6 +367,120 @@ function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", sh
   }
 }
 
+function renderSingleStockChart() {
+  const symbol = els.singleStockSymbol.value || state.symbols[0];
+  const quote = state.quotes.find((item) => item.symbol === symbol);
+  const range = Math.max(7, Number(els.singleStockRange.value || 7));
+  let rows = rowsForSymbol(symbol);
+  if (quote && Number.isFinite(Number(quote.price))) {
+    const liveRow = {
+      date: quote.tradeDate || localDateKey(new Date()),
+      close: Number(quote.price),
+      volume: Number(quote.volume || 0),
+    };
+    const sameDate = rows.findIndex((row) => row.date === liveRow.date);
+    if (sameDate >= 0) rows[sameDate] = liveRow;
+    else rows.push(liveRow);
+  }
+  rows = rows.sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-range);
+  if (rows.length < 2) rows = syntheticRowsFromQuote(quote);
+
+  const canvas = els.singleStockChart;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+  els.singleStockName.textContent = quote ? `${symbol} ${quote.name || ""}` : symbol || "-";
+
+  if (rows.length < 2) {
+    els.singleStockStats.innerHTML = "";
+    els.singleStockMessage.textContent = "目前沒有足夠資料繪製單檔走勢。";
+    return;
+  }
+
+  const values = rows.map((row) => Number(row.close)).filter(Number.isFinite);
+  const latest = values[values.length - 1];
+  const first = values[0];
+  const high = Math.max(...values);
+  const low = Math.min(...values);
+  const periodChange = first ? ((latest - first) / first) * 100 : 0;
+  const trend = trendClass(periodChange);
+  els.singleStockStats.innerHTML = `
+    <div class="singleStockStat"><span>最新價</span><strong>${fmt(latest)}</strong></div>
+    <div class="singleStockStat"><span>期間漲跌幅</span><strong class="${trend}">${periodChange >= 0 ? "+" : ""}${fmt(periodChange)}%</strong></div>
+    <div class="singleStockStat"><span>期間最高</span><strong>${fmt(high)}</strong></div>
+    <div class="singleStockStat"><span>期間最低</span><strong>${fmt(low)}</strong></div>
+  `;
+  els.singleStockMessage.textContent = rows[0].date === "前收" ? "歷史資料不足，目前以昨收與最新成交價顯示。" : `資料期間 ${rows[0].date} 至 ${rows[rows.length - 1].date}`;
+
+  const spread = Math.max(high - low, Math.abs(latest) * 0.01, 1);
+  const min = low - spread * 0.12;
+  const max = high + spread * 0.12;
+  const pad = { left: 82, right: 34, top: 28, bottom: 54 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xFor = (index) => pad.left + (plotW * index) / Math.max(1, rows.length - 1);
+  const yFor = (value) => pad.top + plotH - ((value - min) / (max - min)) * plotH;
+
+  ctx.font = "13px Microsoft JhengHei, Arial";
+  ctx.lineWidth = 1;
+  for (let index = 0; index <= 5; index += 1) {
+    const y = pad.top + (plotH * index) / 5;
+    const price = max - ((max - min) * index) / 5;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.strokeStyle = "rgba(27, 117, 188, 0.45)";
+    ctx.stroke();
+    ctx.fillStyle = "#8cc9f7";
+    ctx.textAlign = "right";
+    ctx.fillText(fmt(price), pad.left - 10, y + 4);
+  }
+
+  ctx.beginPath();
+  rows.forEach((row, index) => {
+    const x = xFor(index);
+    const y = yFor(row.close);
+    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(xFor(rows.length - 1), pad.top + plotH);
+  ctx.lineTo(xFor(0), pad.top + plotH);
+  ctx.closePath();
+  const area = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+  area.addColorStop(0, "rgba(82, 200, 255, 0.42)");
+  area.addColorStop(1, "rgba(82, 200, 255, 0.02)");
+  ctx.fillStyle = area;
+  ctx.fill();
+
+  ctx.beginPath();
+  rows.forEach((row, index) => {
+    const x = xFor(index);
+    const y = yFor(row.close);
+    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#52c8ff";
+  ctx.lineWidth = 3;
+  ctx.shadowColor = "rgba(82, 200, 255, 0.8)";
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  const labelStep = Math.max(1, Math.ceil(rows.length / 7));
+  rows.forEach((row, index) => {
+    const x = xFor(index);
+    const y = yFor(row.close);
+    ctx.beginPath();
+    ctx.arc(x, y, index === rows.length - 1 ? 6 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = index === rows.length - 1 ? "#ffd84d" : "#d9ecff";
+    ctx.fill();
+    if (index % labelStep === 0 || index === rows.length - 1) {
+      ctx.fillStyle = "#8cc9f7";
+      ctx.textAlign = "center";
+      ctx.fillText(chartLabel(row.date), x, height - 22);
+    }
+  });
+}
+
 function renderBars(container, rows) {
   container.innerHTML = rows.map((row) => `
     <div class="barRow"><span>${row.label}</span><div class="barTrack"><div class="barFill" style="width:${clamp(row.value, 0, 100)}%"></div></div><strong>${row.tag || Math.round(row.value)}</strong></div>
@@ -424,6 +547,7 @@ function renderDashboard() {
   const alerts = valid.filter((quote) => Math.abs(Number(quote.changePercent || 0)) >= 3);
   renderMetrics(alerts);
   drawHistoryChart();
+  renderSingleStockChart();
   els.boardDate.textContent = new Date().toLocaleDateString("zh-TW");
   els.boardTime.textContent = new Date().toLocaleTimeString("zh-TW", { hour12: false });
   renderBars(els.intentBars, [
@@ -565,6 +689,8 @@ els.usersToggle.addEventListener("click", async () => {
   if (!els.usersPanel.classList.contains("hidden")) await loadUsers();
 });
 els.chartSymbol.addEventListener("change", renderDashboard);
+els.singleStockSymbol.addEventListener("change", renderSingleStockChart);
+els.singleStockRange.addEventListener("change", renderSingleStockChart);
 
 els.saveSettingsBtn.addEventListener("click", async () => {
   try {

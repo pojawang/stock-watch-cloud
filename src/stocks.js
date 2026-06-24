@@ -38,29 +38,77 @@ function taipeiDateKey(timestamp) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-async function fetchYahooHistory(symbol, suffix) {
-  const ticker = `${symbol}.${suffix}`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1mo&interval=1d&events=history`;
+function rocDateKey(value) {
+  const match = String(value || "").trim().match(/^(\d{2,3})\/(\d{1,2})\/(\d{1,2})$/);
+  if (!match) return null;
+  return `${Number(match[1]) + 1911}-${String(match[2]).padStart(2, "0")}-${String(match[3]).padStart(2, "0")}`;
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 3500) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
-  let rejectTimeout;
-  let response;
+  const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
+  let rejectTimer;
   try {
-    response = await Promise.race([
+    const response = await Promise.race([
       fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 StockWatchCloud/1.0" },
+        headers: {
+          "User-Agent": "Mozilla/5.0 StockWatchCloud/1.0",
+          Accept: "application/json,text/plain,*/*",
+        },
         signal: controller.signal,
       }),
       new Promise((_, reject) => {
-        rejectTimeout = setTimeout(() => reject(new Error("Historical quote timeout")), 2700);
+        rejectTimer = setTimeout(() => reject(new Error("Historical quote timeout")), timeoutMs + 200);
       }),
     ]);
+    if (!response.ok) throw new Error(`Historical quote HTTP ${response.status}`);
+    return await response.json();
   } finally {
-    clearTimeout(timeout);
-    clearTimeout(rejectTimeout);
+    clearTimeout(abortTimer);
+    clearTimeout(rejectTimer);
   }
-  if (!response.ok) return [];
-  const payload = await response.json();
+}
+
+async function fetchTwseMonth(symbol, monthDate) {
+  const date = `${monthDate.getUTCFullYear()}${String(monthDate.getUTCMonth() + 1).padStart(2, "0")}01`;
+  const url = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=${date}&stockNo=${encodeURIComponent(symbol)}&response=json`;
+  const payload = await fetchJsonWithTimeout(url);
+  if (!Array.isArray(payload?.data)) return [];
+  return payload.data.map((row) => {
+    const dateKey = rocDateKey(row?.[0]);
+    const close = toNumber(row?.[6]);
+    if (!dateKey || close === null) return null;
+    return {
+      date: dateKey,
+      close,
+      open: toNumber(row?.[3]),
+      high: toNumber(row?.[4]),
+      low: toNumber(row?.[5]),
+      volume: toNumber(row?.[1]) || 0,
+      market: "TWSE",
+      source: "TWSE daily history",
+    };
+  }).filter(Boolean);
+}
+
+async function fetchTwseHistory(symbol) {
+  const now = new Date();
+  const currentMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const previousMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const results = await Promise.allSettled([
+    fetchTwseMonth(symbol, previousMonth),
+    fetchTwseMonth(symbol, currentMonth),
+  ]);
+  const rows = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+  const byDate = new Map();
+  rows.forEach((row) => byDate.set(row.date, row));
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+async function fetchYahooHistory(symbol, suffix) {
+  const ticker = `${symbol}.${suffix}`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1mo&interval=1d&events=history`;
+  const payload = await fetchJsonWithTimeout(url, 2500);
   const result = payload?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const quote = result?.indicators?.quote?.[0] || {};
@@ -87,7 +135,9 @@ async function fetchHistoricalSeries(symbols, marketHints = {}) {
     const preferred = marketHints[symbol] === "TPEx" ? "TWO" : "TW";
     const alternate = preferred === "TW" ? "TWO" : "TW";
     try {
-      let rows = await fetchYahooHistory(symbol, preferred);
+      let rows = preferred === "TW" ? await fetchTwseHistory(symbol) : [];
+      if (rows.length >= 5) return [symbol, rows.slice(-20)];
+      rows = await fetchYahooHistory(symbol, preferred);
       if (!rows.length) rows = await fetchYahooHistory(symbol, alternate);
       return [symbol, rows.slice(-20)];
     } catch (_) {

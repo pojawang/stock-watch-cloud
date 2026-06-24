@@ -104,6 +104,26 @@
       </article>
     </section>
 
+    <section class="panel singleStockPanel">
+      <div class="panelHead">
+        <div>
+          <h2>單檔折線圖</h2>
+          <span id="singleStockName">-</span>
+        </div>
+        <div class="chartControls">
+          <select id="singleStockRange" aria-label="顯示期間">
+            <option value="7">近 7 個交易日</option>
+            <option value="14">近 14 個交易日</option>
+            <option value="20">近 20 個交易日</option>
+          </select>
+          <select id="singleStockSymbol" aria-label="股票代號"></select>
+        </div>
+      </div>
+      <div id="singleStockStats" class="singleStockStats"></div>
+      <canvas id="singleStockChart" width="1200" height="420"></canvas>
+      <p id="singleStockMessage" class="message"></p>
+    </section>
+
     <section class="aiBoard">
       <div class="aiBoardTitle">
         <div>
@@ -132,6 +152,6 @@
     </section>
   </main>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=4"></script>
 </body>
 </html>

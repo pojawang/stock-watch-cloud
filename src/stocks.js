@@ -147,6 +147,47 @@ async function fetchHistoricalSeries(symbols, marketHints = {}) {
   return Object.fromEntries(entries);
 }
 
+async function fetchFundamentalMetrics(symbols) {
+  const wanted = new Set(normalizeSymbols(symbols));
+  if (!wanted.size) return {};
+
+  const output = {};
+  const sources = await Promise.allSettled([
+    fetchJsonWithTimeout("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL", 4500),
+    fetchJsonWithTimeout("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", 4500),
+  ]);
+
+  const twseRows = sources[0].status === "fulfilled"
+    ? (Array.isArray(sources[0].value) ? sources[0].value : sources[0].value?.value || [])
+    : [];
+  twseRows.forEach((row) => {
+    const symbol = String(row.Code || "").trim();
+    if (!wanted.has(symbol)) return;
+    output[symbol] = {
+      peRatio: toNumber(row.PEratio),
+      dividendYield: toNumber(row.DividendYield),
+      fundamentalsDate: row.Date || null,
+      fundamentalsSource: "TWSE OpenAPI",
+    };
+  });
+
+  const tpexRows = sources[1].status === "fulfilled"
+    ? (Array.isArray(sources[1].value) ? sources[1].value : sources[1].value?.value || [])
+    : [];
+  tpexRows.forEach((row) => {
+    const symbol = String(row.SecuritiesCompanyCode || "").trim();
+    if (!wanted.has(symbol)) return;
+    output[symbol] = {
+      peRatio: toNumber(row.PriceEarningRatio),
+      dividendYield: toNumber(row.YieldRatio),
+      fundamentalsDate: row.Date || null,
+      fundamentalsSource: "TPEx OpenAPI",
+    };
+  });
+
+  return output;
+}
+
 async function fetchRealtimeQuotes(symbols) {
   const cleanSymbols = normalizeSymbols(symbols);
   if (!cleanSymbols.length) return [];
@@ -162,9 +203,11 @@ async function fetchRealtimeQuotes(symbols) {
   if (!response.ok) throw new Error("無法取得公開行情資料。");
   const payload = await response.json();
   const items = Array.isArray(payload.msgArray) ? payload.msgArray : [];
+  const fundamentals = await fetchFundamentalMetrics(cleanSymbols);
 
   return cleanSymbols.map((symbol) => {
     const row = items.find((item) => item.c === symbol && ["tse", "otc"].includes(item.ex));
+    const metrics = fundamentals[symbol] || {};
     if (!row) {
       return {
         symbol,
@@ -172,6 +215,8 @@ async function fetchRealtimeQuotes(symbols) {
         name: "",
         price: null,
         previousClose: null,
+        peRatio: metrics.peRatio ?? null,
+        dividendYield: metrics.dividendYield ?? null,
         change: null,
         changePercent: null,
         open: null,
@@ -214,6 +259,10 @@ async function fetchRealtimeQuotes(symbols) {
       name: row.n || "",
       price,
       previousClose,
+      peRatio: metrics.peRatio ?? null,
+      dividendYield: metrics.dividendYield ?? null,
+      fundamentalsDate: metrics.fundamentalsDate ?? null,
+      fundamentalsSource: metrics.fundamentalsSource ?? null,
       change,
       changePercent,
       open,

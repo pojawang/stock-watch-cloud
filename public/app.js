@@ -88,6 +88,11 @@ function pct(value) {
   return `${fmt(value)}%`;
 }
 
+function ratioFmt(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  return fmt(value);
+}
+
 function trendClass(value) {
   return Number(value) > 0 ? "up" : Number(value) < 0 ? "down" : "";
 }
@@ -247,12 +252,12 @@ function renderQuotes(payload) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${quote.symbol}</td><td>${quote.name || "-"}</td><td>${quote.market || "-"}</td>
-      <td>${fmt(quote.price)}</td><td class="${trend}">${fmt(quote.change)}</td><td class="${trend}">${pct(quote.changePercent)}</td>
+      <td>${fmt(quote.price)}</td><td>${fmt(quote.previousClose)}</td><td>${ratioFmt(quote.peRatio)}</td><td>${pct(quote.dividendYield)}</td><td class="${trend}">${fmt(quote.change)}</td><td class="${trend}">${pct(quote.changePercent)}</td>
       <td>${intFmt(quote.volume)}</td><td>${quote.tradeTime || "-"}</td>
     `;
     els.quotesBody.appendChild(tr);
   });
-  if (!state.quotes.length) els.quotesBody.innerHTML = `<tr><td colspan="8" class="warn">目前沒有報價資料。</td></tr>`;
+  if (!state.quotes.length) els.quotesBody.innerHTML = `<tr><td colspan="11" class="warn">目前沒有報價資料。</td></tr>`;
   renderSummary(payload.summary || []);
   renderDashboard();
 }

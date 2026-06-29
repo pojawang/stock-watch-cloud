@@ -110,6 +110,10 @@ const els = {
   sentimentLabel: $("#sentimentLabel"),
   sentimentScore: $("#sentimentScore"),
   finalAdvice: $("#finalAdvice"),
+  supportResistanceBox: $("#supportResistanceBox"),
+  movingAverageBox: $("#movingAverageBox"),
+  volumeMultipleBox: $("#volumeMultipleBox"),
+  valuationBox: $("#valuationBox"),
 };
 
 function fmt(value, digits = 2) {
@@ -585,6 +589,93 @@ function renderBars(container, rows) {
   `).join("");
 }
 
+function averageLast(values, length) {
+  const clean = values.filter((value) => Number.isFinite(value));
+  if (!clean.length) return null;
+  return avg(clean.slice(-Math.min(length, clean.length)));
+}
+
+function compactLevelRow(label, value, note = "") {
+  return `<div class="levelRow"><span>${label}</span><strong>${value}</strong>${note ? `<small>${note}</small>` : ""}</div>`;
+}
+
+function renderSupportResistance(selected, rows) {
+  const price = Number(selected.price || rows.at(-1)?.close || 0);
+  const prices = rows.map((row) => Number(row.close)).filter(Number.isFinite);
+  if (!price || !prices.length) {
+    els.supportResistanceBox.innerHTML = `<p class="message">尚無足夠價格資料。</p>`;
+    return;
+  }
+  const recent = prices.slice(-20);
+  const support = Math.min(...recent);
+  const resistance = Math.max(...recent);
+  const range = Math.max(resistance - support, price * 0.01);
+  const position = clamp(((price - support) / range) * 100, 0, 100);
+  const tone = position > 78 ? "靠近壓力區" : position < 22 ? "靠近支撐區" : "位於區間中段";
+  els.supportResistanceBox.innerHTML = `
+    ${compactLevelRow("目前價", fmt(price), tone)}
+    ${compactLevelRow("支撐區", fmt(support), "近 20 日低點")}
+    ${compactLevelRow("壓力區", fmt(resistance), "近 20 日高點")}
+    <div class="positionTrack"><div style="width:${position}%"></div></div>
+  `;
+}
+
+function renderMovingAverages(selected, rows) {
+  const price = Number(selected.price || rows.at(-1)?.close || 0);
+  const values = rows.map((row) => Number(row.close)).filter(Number.isFinite);
+  const ma5 = averageLast(values, 5);
+  const ma10 = averageLast(values, 10);
+  const ma20 = averageLast(values, 20);
+  if (!price || !ma5) {
+    els.movingAverageBox.innerHTML = `<p class="message">尚無足夠均線資料。</p>`;
+    return;
+  }
+  const ordering = ma20 && ma5 > ma10 && ma10 > ma20 ? "多頭排列" : ma20 && ma5 < ma10 && ma10 < ma20 ? "空頭排列" : "均線糾結";
+  const above = [ma5, ma10, ma20].filter((value) => value && price >= value).length;
+  els.movingAverageBox.innerHTML = `
+    ${compactLevelRow("排列狀態", ordering, `價格站上 ${above}/3 條均線`)}
+    ${compactLevelRow("5 日均線", fmt(ma5), price >= ma5 ? "站上" : "跌破")}
+    ${compactLevelRow("10 日均線", fmt(ma10), ma10 ? (price >= ma10 ? "站上" : "跌破") : "資料不足")}
+    ${compactLevelRow("20 日均線", fmt(ma20), ma20 ? (price >= ma20 ? "站上" : "跌破") : "資料不足")}
+  `;
+}
+
+function renderVolumeMultiple(selected, rows) {
+  const currentVolume = Number(selected.volume || rows.at(-1)?.volume || 0);
+  const volumes = rows.map((row) => Number(row.volume || 0)).filter((value) => Number.isFinite(value) && value > 0);
+  const averageVolume = averageLast(volumes.slice(0, -1).length ? volumes.slice(0, -1) : volumes, 5);
+  if (!currentVolume || !averageVolume) {
+    els.volumeMultipleBox.innerHTML = `<p class="message">尚無足夠成交量資料。</p>`;
+    return;
+  }
+  const multiple = currentVolume / averageVolume;
+  const score = clamp(multiple * 35, 0, 100);
+  const label = multiple >= 2 ? "明顯放量" : multiple >= 1.2 ? "溫和放量" : multiple <= 0.65 ? "量縮" : "量能持平";
+  els.volumeMultipleBox.innerHTML = `
+    ${compactLevelRow("量能狀態", label, `${fmt(multiple)} 倍`)}
+    ${compactLevelRow("目前成交量", intFmt(currentVolume))}
+    ${compactLevelRow("近 5 日均量", intFmt(averageVolume))}
+    <div class="positionTrack"><div style="width:${score}%"></div></div>
+  `;
+}
+
+function renderValuation(valid, selected) {
+  const pe = selected.peRatio === null || selected.peRatio === undefined ? NaN : Number(selected.peRatio);
+  const yieldRate = selected.dividendYield === null || selected.dividendYield === undefined ? NaN : Number(selected.dividendYield);
+  const peValues = valid.map((quote) => Number(quote.peRatio)).filter(Number.isFinite).sort((a, b) => a - b);
+  const yieldValues = valid.map((quote) => Number(quote.dividendYield)).filter(Number.isFinite).sort((a, b) => b - a);
+  const peRank = Number.isFinite(pe) && peValues.length ? peValues.findIndex((value) => value >= pe) + 1 : null;
+  const yieldRank = Number.isFinite(yieldRate) && yieldValues.length ? yieldValues.findIndex((value) => value <= yieldRate) + 1 : null;
+  const peTone = !Number.isFinite(pe) ? "資料不足" : pe <= 12 ? "估值偏低" : pe <= 25 ? "估值中性" : "估值偏高";
+  const yieldTone = !Number.isFinite(yieldRate) ? "資料不足" : yieldRate >= 5 ? "收益較高" : yieldRate >= 2.5 ? "收益中性" : "收益偏低";
+  els.valuationBox.innerHTML = `
+    ${compactLevelRow("本益比", ratioFmt(pe), peRank ? `10 檔中第 ${peRank} 低` : peTone)}
+    ${compactLevelRow("殖利率", pct(yieldRate), yieldRank ? `10 檔中第 ${yieldRank} 高` : yieldTone)}
+    ${compactLevelRow("估值判讀", peTone, yieldTone)}
+    <p class="miniNote">估值僅作觀測，不代表合理買賣價格。</p>
+  `;
+}
+
 function drawRadar(values) {
   const canvas = els.radarChart;
   const ctx = canvas.getContext("2d");
@@ -646,6 +737,10 @@ function renderDashboard() {
   renderMetrics(alerts);
   drawHistoryChart();
   renderSingleStockChart();
+  renderSupportResistance(selected, selectedRows);
+  renderMovingAverages(selected, selectedRows);
+  renderVolumeMultiple(selected, selectedRows);
+  renderValuation(valid, selected);
   els.boardDate.textContent = new Date().toLocaleDateString("zh-TW");
   els.boardTime.textContent = new Date().toLocaleTimeString("zh-TW", { hour12: false });
   renderBars(els.intentBars, [

@@ -142,6 +142,14 @@ canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6p
 .scenario strong { display: flex; justify-content: space-between; color: var(--yellow); margin-bottom: 5px; }
 .profileRow { display: grid; grid-template-columns: 58px minmax(0, 1fr) 50px; gap: 8px; align-items: center; font-size: 12px; }
 .profileBar { height: 10px; background: linear-gradient(90deg, #00a3ff, var(--green), var(--yellow), var(--red)); }
+.levelBox { display: grid; gap: 10px; line-height: 1.45; }
+.levelRow { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px 10px; align-items: baseline; padding-bottom: 8px; border-bottom: 1px solid rgba(27, 117, 188, 0.45); }
+.levelRow span { color: var(--muted); font-size: 13px; }
+.levelRow strong { color: var(--yellow); font-size: 18px; overflow-wrap: anywhere; }
+.levelRow small { grid-column: 2; color: var(--text); }
+.positionTrack { height: 12px; border: 1px solid #123b5e; background: rgba(7, 19, 31, 0.9); overflow: hidden; }
+.positionTrack div { height: 100%; background: linear-gradient(90deg, var(--green), var(--yellow), var(--red)); }
+.miniNote { color: var(--muted); font-size: 13px; }
 .gaugeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .gauge { min-height: 84px; border: 1px solid #5c4a16; border-radius: 999px; display: grid; place-items: center; color: var(--yellow); background: radial-gradient(circle, #101010 45%, #312506 46%, #050505 70%); text-align: center; }
 .gauge strong { display: block; font-size: 24px; }

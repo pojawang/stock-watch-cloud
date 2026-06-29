@@ -132,7 +132,7 @@ async function quotesForUser(userId, save) {
 
 async function historyForUser(userId) {
   const symbols = await ensureUserStocks(userId);
-  const since = new Date(Date.now() - 14 * 86400 * 1000).toISOString().slice(0, 10);
+  const since = new Date(Date.now() - 110 * 86400 * 1000).toISOString().slice(0, 10);
   const { data, error } = await getSupabase()
     .from("quote_snapshots")
     .select("*")

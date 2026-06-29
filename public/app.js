@@ -79,6 +79,7 @@ const els = {
   metricAdvancers: $("#metricAdvancers"),
   metricAverage: $("#metricAverage"),
   metricAlerts: $("#metricAlerts"),
+  chartRange: $("#chartRange"),
   chartSymbol: $("#chartSymbol"),
   historyChart: $("#historyChart"),
   chartEmpty: $("#chartEmpty"),
@@ -212,6 +213,10 @@ function selectedSymbol() {
   return els.chartSymbol.value || state.symbols[0];
 }
 
+function selectedChartRange() {
+  return els.chartRange?.value || "week";
+}
+
 function rowsForSymbol(symbol) {
   const rows = (state.history.snapshots || [])
     .map((snapshot) => {
@@ -250,6 +255,14 @@ function shiftedWeekRows(symbol) {
   return rows.filter((row) => row.date <= endKey).slice(-7);
 }
 
+function chartRangeRows(symbol) {
+  const rows = rowsForSymbol(symbol);
+  const range = selectedChartRange();
+  if (range === "month") return rows.slice(-22);
+  if (range === "quarter") return rows.slice(-66);
+  return rows.slice(-7);
+}
+
 function syntheticRowsFromQuote(quote) {
   if (!quote || !Number.isFinite(Number(quote.price))) return [];
   const price = Number(quote.price);
@@ -262,10 +275,13 @@ function syntheticRowsFromQuote(quote) {
 }
 
 function chartRowsForSymbol(symbol, quote) {
-  const shifted = shiftedWeekRows(symbol);
-  if (shifted.length >= 4) return { rows: shifted, source: "shifted" };
-  const recent = rowsForSymbol(symbol).slice(-7);
-  if (recent.length >= 4) return { rows: recent, source: "recent" };
+  const range = selectedChartRange();
+  if (range === "week") {
+    const shifted = shiftedWeekRows(symbol);
+    if (shifted.length >= 4) return { rows: shifted, source: "shifted" };
+  }
+  const recent = chartRangeRows(symbol);
+  if (recent.length >= 4) return { rows: recent, source: range };
   return { rows: syntheticRowsFromQuote(quote), source: "quote" };
 }
 
@@ -394,11 +410,12 @@ function drawHistoryChart() {
   const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
   if (!rows.length) {
-    els.chartEmpty.textContent = "往前推一週的區間目前沒有資料，請等待排程累積或手動刷新建立快照。";
+    els.chartEmpty.textContent = "目前沒有足夠 K 線資料，請等待排程累積或手動刷新建立快照。";
     return;
   }
-  els.chartEmpty.textContent = source === "shifted" ? "" : source === "recent"
-    ? "尚未累積往前一週快照，暫以最近可用資料顯示。"
+  const rangeLabel = selectedChartRange() === "quarter" ? "三個月" : selectedChartRange() === "month" ? "一個月" : "一週";
+  els.chartEmpty.textContent = ["shifted", "week", "month", "quarter"].includes(source) ? `目前顯示${rangeLabel} K 線資料。` : source === "recent"
+    ? "尚未累積完整快照，暫以最近可用資料顯示。"
     : "尚未累積歷史快照，暫以今日報價與前收估算顯示。";
   drawCandlestickChart(ctx, width, height, rows);
 }
@@ -482,11 +499,11 @@ function drawCandlestickChart(ctx, width, height, rows) {
   ctx.textAlign = "left";
   ctx.font = "28px Microsoft JhengHei, Arial";
   ctx.fillStyle = "#f1ff3d";
-  ctx.fillText(`均價5 ${fmt(ma5.at(-1))} ${arrow(ma5.at(-1), ma5.at(-2))}`, 0, 32);
+  ctx.fillText(`均價線5 ${fmt(ma5.at(-1))} ${arrow(ma5.at(-1), ma5.at(-2))}`, 0, 32);
   ctx.fillStyle = "#ff23d7";
-  ctx.fillText(`均價20 ${fmt(ma20.at(-1))} ${arrow(ma20.at(-1), ma20.at(-2))}`, 280, 32);
+  ctx.fillText(`均價線20 ${fmt(ma20.at(-1))} ${arrow(ma20.at(-1), ma20.at(-2))}`, 300, 32);
   ctx.fillStyle = "#20efe8";
-  ctx.fillText(`均價60 ${fmt(ma60.at(-1))} ${arrow(ma60.at(-1), ma60.at(-2))}`, 588, 32);
+  ctx.fillText(`均價線60 ${fmt(ma60.at(-1))} ${arrow(ma60.at(-1), ma60.at(-2))}`, 628, 32);
 
   const candleW = clamp(plotW / Math.max(12, candles.length) * 0.58, 8, 22);
   candles.forEach((row, index) => {
@@ -1065,6 +1082,7 @@ els.usersToggle.addEventListener("click", async () => {
   if (!els.usersPanel.classList.contains("hidden")) await loadUsers();
 });
 els.chartSymbol.addEventListener("change", renderDashboard);
+els.chartRange.addEventListener("change", renderDashboard);
 els.singleStockSymbol.addEventListener("change", renderSingleStockChart);
 els.singleStockRange.addEventListener("change", renderSingleStockChart);
 els.generateRecommendationBtn.addEventListener("click", generateRecommendations);

@@ -132,7 +132,14 @@
       <article class="panel">
         <div class="panelHead">
           <h2>往前一週 K 線比較</h2>
-          <select id="chartSymbol"></select>
+          <div class="chartControls">
+            <select id="chartRange" aria-label="K 線期間">
+              <option value="week">一週</option>
+              <option value="month">一個月</option>
+              <option value="quarter">三個月</option>
+            </select>
+            <select id="chartSymbol"></select>
+          </div>
         </div>
         <canvas id="historyChart" width="980" height="620"></canvas>
         <p id="chartEmpty" class="message"></p>
@@ -198,6 +205,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=10"></script>
+  <script src="/app.js?v=11"></script>
 </body>
 </html>

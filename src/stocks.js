@@ -93,12 +93,8 @@ async function fetchTwseMonth(symbol, monthDate) {
 
 async function fetchTwseHistory(symbol) {
   const now = new Date();
-  const currentMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const previousMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  const results = await Promise.allSettled([
-    fetchTwseMonth(symbol, previousMonth),
-    fetchTwseMonth(symbol, currentMonth),
-  ]);
+  const months = [3, 2, 1, 0].map((offset) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1)));
+  const results = await Promise.allSettled(months.map((month) => fetchTwseMonth(symbol, month)));
   const rows = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
   const byDate = new Map();
   rows.forEach((row) => byDate.set(row.date, row));
@@ -107,7 +103,7 @@ async function fetchTwseHistory(symbol) {
 
 async function fetchYahooHistory(symbol, suffix) {
   const ticker = `${symbol}.${suffix}`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1mo&interval=1d&events=history`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3mo&interval=1d&events=history`;
   const payload = await fetchJsonWithTimeout(url, 2500);
   const result = payload?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
@@ -136,10 +132,10 @@ async function fetchHistoricalSeries(symbols, marketHints = {}) {
     const alternate = preferred === "TW" ? "TWO" : "TW";
     try {
       let rows = preferred === "TW" ? await fetchTwseHistory(symbol) : [];
-      if (rows.length >= 5) return [symbol, rows.slice(-20)];
+      if (rows.length >= 5) return [symbol, rows.slice(-80)];
       rows = await fetchYahooHistory(symbol, preferred);
       if (!rows.length) rows = await fetchYahooHistory(symbol, alternate);
-      return [symbol, rows.slice(-20)];
+      return [symbol, rows.slice(-80)];
     } catch (_) {
       return [symbol, []];
     }

@@ -37,6 +37,7 @@ button, select, input, textarea {
   font: inherit;
 }
 textarea { width: 100%; padding: 12px; resize: vertical; }
+label { color: var(--muted); }
 button { cursor: pointer; }
 button:hover, select:hover, input:hover { border-color: #7cc7ff; box-shadow: 0 0 10px rgba(82, 200, 255, 0.35); }
 button.primary { background: var(--yellow); border-color: var(--yellow); color: #05080d; box-shadow: 0 0 12px rgba(255, 216, 77, 0.35); }
@@ -107,6 +108,15 @@ th { color: var(--yellow); font-size: 13px; }
 canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6px; background: #060a10; }
 .summaryBox, .usersList { display: grid; gap: 10px; line-height: 1.55; }
 .summaryBox p { padding-bottom: 10px; border-bottom: 1px solid rgba(27, 117, 188, 0.45); }
+.recommendationGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.recommendationGrid label { display: grid; gap: 6px; min-width: 0; }
+.recommendationGrid input, .recommendationGrid select { width: 100%; }
+.recommendationActions { margin: 4px 0 12px; }
+.recommendationResult { display: grid; gap: 10px; margin: 0 0 14px; padding: 12px; border: 1px solid rgba(255, 216, 77, 0.65); border-radius: 6px; background: rgba(55, 40, 0, 0.25); color: #f8f0c0; }
+.recommendationChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.recommendationChips span { border: 1px solid rgba(82, 200, 255, 0.55); border-radius: 999px; padding: 6px 10px; color: var(--text); background: rgba(7, 19, 31, 0.75); }
+.manualSymbolsLabel { display: grid; gap: 4px; margin: 8px 0; }
+.manualSymbolsLabel span { color: var(--muted); font-size: 13px; }
 .userForm { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
 .userRow { display: grid; grid-template-columns: 1.2fr 1fr 90px auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(27, 117, 188, 0.45); border-radius: 6px; background: rgba(7, 19, 31, 0.72); }
 .userRow small { display: block; color: var(--muted); margin-top: 3px; }
@@ -182,7 +192,7 @@ canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6p
   .panel { padding: 14px; overflow: hidden; }
   .tableWrap { width: 100%; overflow-x: auto; }
   table { min-width: 760px; }
-  .metricGrid, .dashboardGrid, .aiGrid, .userForm, .userRow { grid-template-columns: 1fr; }
+  .metricGrid, .dashboardGrid, .aiGrid, .userForm, .userRow, .recommendationGrid { grid-template-columns: 1fr; }
   .userActions { justify-content: flex-start; }
   .aiTile.wide { grid-column: span 1; }
 }

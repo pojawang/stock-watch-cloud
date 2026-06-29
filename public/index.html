@@ -26,7 +26,7 @@
     <div class="actions">
       <span id="userBadge" class="userBadge">-</span>
       <button id="refreshBtn" class="primary">立即刷新</button>
-      <button id="settingsToggle">我的股票</button>
+      <button id="settingsToggle">投資建議</button>
       <button id="usersToggle" class="hidden">帳號管理</button>
       <button id="logoutBtn">登出</button>
     </div>
@@ -35,12 +35,54 @@
   <main id="appMain" class="hidden">
     <section id="settingsPanel" class="panel hidden">
       <div class="panelHead">
-        <h2>我的 10 檔股票</h2>
-        <span>每個使用者都有自己的清單</span>
+        <h2>投資建議</h2>
+        <span>先填寫偏好，再產生 10 檔候選清單</span>
       </div>
+      <div class="recommendationGrid">
+        <label>投資金額
+          <input id="investAmount" type="number" min="0" step="1000" placeholder="例如 100000">
+        </label>
+        <label>想買標的
+          <select id="productType">
+            <option value="mixed">個股與 ETF 都可</option>
+            <option value="stock">以個股為主</option>
+            <option value="etf">以 ETF 為主</option>
+          </select>
+        </label>
+        <label>股票類別
+          <select id="stockCategory">
+            <option value="balanced">均衡配置</option>
+            <option value="semiconductor">半導體科技</option>
+            <option value="finance">金融穩健</option>
+            <option value="highDividend">高股息收益</option>
+            <option value="aiElectric">AI 與電子供應鏈</option>
+          </select>
+        </label>
+        <label>風險偏好
+          <select id="riskPreference">
+            <option value="balanced">穩健成長</option>
+            <option value="conservative">保守穩定</option>
+            <option value="aggressive">積極成長</option>
+          </select>
+        </label>
+        <label>預計持有
+          <select id="investmentHorizon">
+            <option value="medium">3 到 12 個月</option>
+            <option value="short">1 到 3 個月</option>
+            <option value="long">1 年以上</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions recommendationActions">
+        <button id="generateRecommendationBtn" type="button">產生 10 檔建議</button>
+      </div>
+      <div id="recommendationResult" class="recommendationResult hidden"></div>
+      <label class="manualSymbolsLabel">最後採用的 10 檔股票代號
+        <span>可直接使用系統建議，也可以自行改成想監看的股票代號。</span>
+      </label>
       <textarea id="symbolsInput" rows="3" spellcheck="false"></textarea>
       <div class="actions">
-        <button id="saveSettingsBtn" class="primary">儲存清單</button>
+        <button id="saveSettingsBtn" class="primary">儲存並更新儀表板</button>
       </div>
       <p id="settingsMessage" class="message"></p>
     </section>
@@ -152,6 +194,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=5"></script>
+  <script src="/app.js?v=6"></script>
 </body>
 </html>

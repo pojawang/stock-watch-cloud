@@ -7,6 +7,38 @@ const state = {
 };
 
 const colors = ["#52c8ff", "#ff3333", "#21d86b", "#ffd84d", "#b86cff", "#00e5ff", "#ff6b9a", "#7cff9b", "#f59cff", "#d9ecff"];
+const recommendationUniverse = [
+  { symbol: "0050", name: "元大台灣50", type: "etf", categories: ["balanced", "highDividend"], risk: 1, minAmount: 10000 },
+  { symbol: "0056", name: "元大高股息", type: "etf", categories: ["highDividend", "balanced"], risk: 1, minAmount: 10000 },
+  { symbol: "00878", name: "國泰永續高股息", type: "etf", categories: ["highDividend", "balanced"], risk: 1, minAmount: 10000 },
+  { symbol: "006208", name: "富邦台50", type: "etf", categories: ["balanced"], risk: 1, minAmount: 10000 },
+  { symbol: "00713", name: "元大台灣高息低波", type: "etf", categories: ["highDividend", "balanced"], risk: 1, minAmount: 10000 },
+  { symbol: "00919", name: "群益台灣精選高息", type: "etf", categories: ["highDividend"], risk: 2, minAmount: 10000 },
+  { symbol: "00929", name: "復華台灣科技優息", type: "etf", categories: ["highDividend", "semiconductor", "aiElectric"], risk: 2, minAmount: 10000 },
+  { symbol: "0052", name: "富邦科技", type: "etf", categories: ["semiconductor", "aiElectric"], risk: 2, minAmount: 10000 },
+  { symbol: "00881", name: "國泰台灣5G+", type: "etf", categories: ["semiconductor", "aiElectric"], risk: 2, minAmount: 10000 },
+  { symbol: "00922", name: "國泰台灣領袖50", type: "etf", categories: ["balanced"], risk: 2, minAmount: 10000 },
+  { symbol: "2330", name: "台積電", type: "stock", categories: ["semiconductor", "balanced", "aiElectric"], risk: 2, minAmount: 50000 },
+  { symbol: "2317", name: "鴻海", type: "stock", categories: ["aiElectric", "balanced"], risk: 2, minAmount: 30000 },
+  { symbol: "2454", name: "聯發科", type: "stock", categories: ["semiconductor", "aiElectric"], risk: 3, minAmount: 50000 },
+  { symbol: "2308", name: "台達電", type: "stock", categories: ["aiElectric", "balanced"], risk: 2, minAmount: 30000 },
+  { symbol: "2303", name: "聯電", type: "stock", categories: ["semiconductor"], risk: 2, minAmount: 20000 },
+  { symbol: "3711", name: "日月光投控", type: "stock", categories: ["semiconductor"], risk: 2, minAmount: 20000 },
+  { symbol: "2379", name: "瑞昱", type: "stock", categories: ["semiconductor", "aiElectric"], risk: 3, minAmount: 30000 },
+  { symbol: "3034", name: "聯詠", type: "stock", categories: ["semiconductor"], risk: 3, minAmount: 30000 },
+  { symbol: "2382", name: "廣達", type: "stock", categories: ["aiElectric"], risk: 3, minAmount: 30000 },
+  { symbol: "3231", name: "緯創", type: "stock", categories: ["aiElectric"], risk: 3, minAmount: 20000 },
+  { symbol: "2356", name: "英業達", type: "stock", categories: ["aiElectric"], risk: 2, minAmount: 20000 },
+  { symbol: "2324", name: "仁寶", type: "stock", categories: ["aiElectric"], risk: 2, minAmount: 20000 },
+  { symbol: "2882", name: "國泰金", type: "stock", categories: ["finance", "balanced", "highDividend"], risk: 1, minAmount: 20000 },
+  { symbol: "2881", name: "富邦金", type: "stock", categories: ["finance", "balanced"], risk: 1, minAmount: 20000 },
+  { symbol: "2891", name: "中信金", type: "stock", categories: ["finance", "highDividend"], risk: 1, minAmount: 20000 },
+  { symbol: "2886", name: "兆豐金", type: "stock", categories: ["finance", "highDividend"], risk: 1, minAmount: 20000 },
+  { symbol: "5880", name: "合庫金", type: "stock", categories: ["finance", "highDividend"], risk: 1, minAmount: 20000 },
+  { symbol: "5871", name: "中租-KY", type: "stock", categories: ["finance", "balanced"], risk: 2, minAmount: 20000 },
+  { symbol: "2412", name: "中華電", type: "stock", categories: ["balanced", "highDividend"], risk: 1, minAmount: 20000 },
+  { symbol: "3008", name: "大立光", type: "stock", categories: ["semiconductor", "aiElectric"], risk: 3, minAmount: 80000 },
+];
 const $ = (selector) => document.querySelector(selector);
 const els = {
   loginView: $("#loginView"),
@@ -23,6 +55,13 @@ const els = {
   usersToggle: $("#usersToggle"),
   logoutBtn: $("#logoutBtn"),
   settingsPanel: $("#settingsPanel"),
+  investAmount: $("#investAmount"),
+  productType: $("#productType"),
+  stockCategory: $("#stockCategory"),
+  riskPreference: $("#riskPreference"),
+  investmentHorizon: $("#investmentHorizon"),
+  generateRecommendationBtn: $("#generateRecommendationBtn"),
+  recommendationResult: $("#recommendationResult"),
   symbolsInput: $("#symbolsInput"),
   saveSettingsBtn: $("#saveSettingsBtn"),
   settingsMessage: $("#settingsMessage"),
@@ -239,6 +278,60 @@ function renderSettings() {
   els.singleStockSymbol.innerHTML = state.symbols.map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("");
   if (state.symbols.includes(current)) els.chartSymbol.value = current;
   if (state.symbols.includes(currentSingle)) els.singleStockSymbol.value = currentSingle;
+}
+
+function recommendationRiskLevel(value) {
+  if (value === "conservative") return 1;
+  if (value === "aggressive") return 3;
+  return 2;
+}
+
+function scoreRecommendation(item, profile) {
+  let score = 100;
+  const targetRisk = recommendationRiskLevel(profile.riskPreference);
+  if (profile.productType === "etf" && item.type !== "etf") score -= 70;
+  if (profile.productType === "stock" && item.type !== "stock") score -= 34;
+  if (profile.productType === "mixed" && item.type === "etf") score += 6;
+  if (item.categories.includes(profile.stockCategory)) score += 34;
+  if (profile.stockCategory === "balanced" && item.categories.includes("balanced")) score += 20;
+  score -= Math.abs(item.risk - targetRisk) * 18;
+  if (profile.investAmount > 0 && item.minAmount > profile.investAmount) score -= 22;
+  if (profile.investmentHorizon === "short" && item.risk === 3) score += 8;
+  if (profile.investmentHorizon === "long" && item.risk <= 2) score += 8;
+  if (profile.riskPreference === "conservative" && item.type === "etf") score += 10;
+  if (profile.riskPreference === "aggressive" && item.type === "stock") score += 10;
+  return score;
+}
+
+function buildRecommendationProfile() {
+  return {
+    investAmount: Number(els.investAmount.value || 0),
+    productType: els.productType.value,
+    stockCategory: els.stockCategory.value,
+    riskPreference: els.riskPreference.value,
+    investmentHorizon: els.investmentHorizon.value,
+  };
+}
+
+function generateRecommendations() {
+  const profile = buildRecommendationProfile();
+  const ranked = recommendationUniverse
+    .map((item) => ({ ...item, score: scoreRecommendation(item, profile) }))
+    .sort((a, b) => b.score - a.score);
+  const selected = [];
+  ranked.forEach((item) => {
+    if (selected.length < 10 && !selected.some((picked) => picked.symbol === item.symbol)) selected.push(item);
+  });
+  els.symbolsInput.value = selected.map((item) => item.symbol).join(", ");
+  els.recommendationResult.classList.remove("hidden");
+  els.recommendationResult.innerHTML = `
+    <strong>已產生 10 檔候選清單</strong>
+    <div class="recommendationChips">
+      ${selected.map((item) => `<span>${item.symbol} ${item.name}</span>`).join("")}
+    </div>
+    <p>這是依照你填寫的條件產生的規則式候選清單，可再自行修改代號後儲存。內容不構成投資建議或買賣訊號。</p>
+  `;
+  els.settingsMessage.textContent = "確認清單後，請按「儲存並更新儀表板」。";
 }
 
 function renderQuotes(payload) {
@@ -696,6 +789,7 @@ els.usersToggle.addEventListener("click", async () => {
 els.chartSymbol.addEventListener("change", renderDashboard);
 els.singleStockSymbol.addEventListener("change", renderSingleStockChart);
 els.singleStockRange.addEventListener("change", renderSingleStockChart);
+els.generateRecommendationBtn.addEventListener("click", generateRecommendations);
 
 els.saveSettingsBtn.addEventListener("click", async () => {
   try {

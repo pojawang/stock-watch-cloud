@@ -150,6 +150,31 @@ canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6p
 .positionTrack { height: 12px; border: 1px solid #123b5e; background: rgba(7, 19, 31, 0.9); overflow: hidden; }
 .positionTrack div { height: 100%; background: linear-gradient(90deg, var(--green), var(--yellow), var(--red)); }
 .miniNote { color: var(--muted); font-size: 13px; }
+.zoneMeter, .volumeGauge, .valuationMeter { display: grid; gap: 8px; }
+.zoneLabels, .scaleTicks { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.zoneLabels strong { color: var(--yellow); text-align: center; }
+.zoneTrack, .volumeScale, .valuationTrack { position: relative; height: 18px; border: 1px solid #123b5e; border-radius: 999px; background: linear-gradient(90deg, var(--green), var(--yellow), var(--red)); box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.55); }
+.zoneTrack i, .volumeScale i, .valuationTrack i { position: absolute; top: 50%; width: 14px; height: 28px; border: 2px solid #fff; border-radius: 999px; background: var(--yellow); box-shadow: 0 0 12px var(--yellow); transform: translate(-50%, -50%); }
+.zoneNow { color: var(--text); border: 1px solid rgba(27, 117, 188, 0.45); border-radius: 6px; padding: 8px 10px; background: rgba(7, 19, 31, 0.7); }
+.maStatus { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-radius: 6px; padding: 9px 10px; font-weight: 700; }
+.maStatus small { color: var(--text); font-weight: 400; }
+.maStatus.bull { color: var(--red); background: rgba(255, 51, 51, 0.16); border: 1px solid rgba(255, 51, 51, 0.5); }
+.maStatus.bear { color: var(--green); background: rgba(33, 216, 107, 0.14); border: 1px solid rgba(33, 216, 107, 0.45); }
+.maStatus.flat { color: var(--yellow); background: rgba(255, 216, 77, 0.12); border: 1px solid rgba(255, 216, 77, 0.45); }
+.maChart { position: relative; display: grid; gap: 14px; padding: 18px 8px 10px; border: 1px solid rgba(27, 117, 188, 0.45); border-radius: 6px; background: rgba(7, 19, 31, 0.72); }
+.maLine { position: relative; height: 18px; border-bottom: 2px solid rgba(82, 200, 255, 0.38); }
+.maLine span { position: relative; z-index: 1; color: var(--muted); font-size: 12px; }
+.maLine i, .maChart b { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%); }
+.maLine.ma5 i { background: var(--red); box-shadow: 0 0 10px var(--red); }
+.maLine.ma10 i { background: var(--yellow); box-shadow: 0 0 10px var(--yellow); }
+.maLine.ma20 i { background: var(--green); box-shadow: 0 0 10px var(--green); }
+.maChart b { top: 8px; width: auto; height: auto; color: var(--text); font-size: 12px; white-space: nowrap; }
+.volumeGauge strong { color: var(--yellow); font-size: 42px; line-height: 1; text-shadow: 0 0 10px rgba(255, 216, 77, 0.45); }
+.volumeGauge > span { color: var(--text); }
+.valuationTrack.pe { background: linear-gradient(90deg, var(--green), var(--yellow), var(--red)); }
+.valuationTrack.yield { background: linear-gradient(90deg, var(--red), var(--yellow), var(--green)); }
+.valuationMeter span { color: var(--yellow); font-weight: 700; }
+.valuationMeter small { color: var(--muted); }
 .gaugeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .gauge { min-height: 84px; border: 1px solid #5c4a16; border-radius: 999px; display: grid; place-items: center; color: var(--yellow); background: radial-gradient(circle, #101010 45%, #312506 46%, #050505 70%); text-align: center; }
 .gauge strong { display: block; font-size: 24px; }

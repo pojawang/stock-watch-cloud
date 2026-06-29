@@ -217,7 +217,15 @@ function rowsForSymbol(symbol) {
     .map((snapshot) => {
       const quote = (snapshot.quotes || []).find((item) => item.symbol === symbol);
       if (!quote || quote.price === null) return null;
-      return { date: snapshot.date, close: Number(quote.price), volume: Number(quote.volume || 0) };
+      const close = Number(quote.price);
+      return {
+        date: snapshot.date,
+        open: Number.isFinite(Number(quote.open)) ? Number(quote.open) : close,
+        high: Number.isFinite(Number(quote.high)) ? Number(quote.high) : close,
+        low: Number.isFinite(Number(quote.low)) ? Number(quote.low) : close,
+        close,
+        volume: Number(quote.volume || 0),
+      };
     })
     .filter(Boolean)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -248,8 +256,8 @@ function syntheticRowsFromQuote(quote) {
   const previous = Number.isFinite(Number(quote.previousClose)) ? Number(quote.previousClose) : price;
   const date = quote.tradeDate || localDateKey(new Date());
   return [
-    { date: "前收", close: previous, volume: 0 },
-    { date, close: price, volume: Number(quote.volume || 0) },
+    { date: "前收", open: previous, high: previous, low: previous, close: previous, volume: 0 },
+    { date, open: previous, high: Math.max(previous, price), low: Math.min(previous, price), close: price, volume: Number(quote.volume || 0) },
   ];
 }
 
@@ -392,7 +400,65 @@ function drawHistoryChart() {
   els.chartEmpty.textContent = source === "shifted" ? "" : source === "recent"
     ? "尚未累積往前一週快照，暫以最近可用資料顯示。"
     : "尚未累積歷史快照，暫以今日報價與前收估算顯示。";
-  drawLine(ctx, width, height, rows.map((row) => row.close), rows.map((row) => chartLabel(row.date)), "#52c8ff", true);
+  drawCandlestickChart(ctx, width, height, rows);
+}
+
+function drawCandlestickChart(ctx, width, height, rows) {
+  const candles = rows.map((row) => {
+    const close = Number(row.close);
+    const open = Number.isFinite(Number(row.open)) ? Number(row.open) : close;
+    const high = Number.isFinite(Number(row.high)) ? Math.max(Number(row.high), open, close) : Math.max(open, close);
+    const low = Number.isFinite(Number(row.low)) ? Math.min(Number(row.low), open, close) : Math.min(open, close);
+    return { ...row, open, high, low, close };
+  }).filter((row) => Number.isFinite(row.close));
+  if (!candles.length) return;
+  let min = Math.min(...candles.map((row) => row.low));
+  let max = Math.max(...candles.map((row) => row.high));
+  if (min === max) { min -= 1; max += 1; }
+  const spread = max - min;
+  min -= spread * 0.08;
+  max += spread * 0.08;
+  const pad = { left: 64, right: 28, top: 24, bottom: 48 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xFor = (index) => pad.left + (plotW * index) / Math.max(1, candles.length - 1);
+  const yFor = (value) => pad.top + plotH - ((value - min) / (max - min)) * plotH;
+  ctx.font = "12px Microsoft JhengHei, Arial";
+  ctx.lineWidth = 1;
+  ctx.textAlign = "right";
+  for (let index = 0; index <= 4; index += 1) {
+    const y = pad.top + (plotH * index) / 4;
+    const price = max - ((max - min) * index) / 4;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.strokeStyle = "rgba(27, 117, 188, 0.45)";
+    ctx.stroke();
+    ctx.fillStyle = "#8cc9f7";
+    ctx.fillText(fmt(price), pad.left - 8, y + 4);
+  }
+  const candleW = clamp(plotW / Math.max(8, candles.length) * 0.58, 10, 28);
+  candles.forEach((row, index) => {
+    const x = xFor(index);
+    const up = row.close >= row.open;
+    const color = up ? "#ff3333" : "#21d86b";
+    const bodyTop = yFor(Math.max(row.open, row.close));
+    const bodyBottom = yFor(Math.min(row.open, row.close));
+    ctx.strokeStyle = color;
+    ctx.fillStyle = up ? "rgba(255, 51, 51, 0.72)" : "rgba(33, 216, 107, 0.72)";
+    ctx.beginPath();
+    ctx.moveTo(x, yFor(row.high));
+    ctx.lineTo(x, yFor(row.low));
+    ctx.stroke();
+    ctx.fillRect(x - candleW / 2, bodyTop, candleW, Math.max(3, bodyBottom - bodyTop));
+    ctx.strokeRect(x - candleW / 2, bodyTop, candleW, Math.max(3, bodyBottom - bodyTop));
+  });
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#8cc9f7";
+  const labelStep = Math.max(1, Math.ceil(candles.length / 7));
+  candles.forEach((row, index) => {
+    if (index % labelStep === 0 || index === candles.length - 1) ctx.fillText(chartLabel(row.date), xFor(index), height - 20);
+  });
 }
 
 function drawLine(ctx, width, height, values, labels = [], color = "#52c8ff", showLabels = false, predict = false) {
@@ -613,10 +679,11 @@ function renderSupportResistance(selected, rows) {
   const position = clamp(((price - support) / range) * 100, 0, 100);
   const tone = position > 78 ? "靠近壓力區" : position < 22 ? "靠近支撐區" : "位於區間中段";
   els.supportResistanceBox.innerHTML = `
-    ${compactLevelRow("目前價", fmt(price), tone)}
-    ${compactLevelRow("支撐區", fmt(support), "近 20 日低點")}
-    ${compactLevelRow("壓力區", fmt(resistance), "近 20 日高點")}
-    <div class="positionTrack"><div style="width:${position}%"></div></div>
+    <div class="zoneMeter">
+      <div class="zoneLabels"><span>支撐 ${fmt(support)}</span><strong>${tone}</strong><span>壓力 ${fmt(resistance)}</span></div>
+      <div class="zoneTrack"><i style="left:${position}%"></i></div>
+      <div class="zoneNow">目前價 ${fmt(price)}，區間位置 ${Math.round(position)}%</div>
+    </div>
   `;
 }
 
@@ -632,11 +699,18 @@ function renderMovingAverages(selected, rows) {
   }
   const ordering = ma20 && ma5 > ma10 && ma10 > ma20 ? "多頭排列" : ma20 && ma5 < ma10 && ma10 < ma20 ? "空頭排列" : "均線糾結";
   const above = [ma5, ma10, ma20].filter((value) => value && price >= value).length;
+  const maValues = [price, ma5, ma10, ma20].filter((value) => Number.isFinite(value));
+  const min = Math.min(...maValues);
+  const max = Math.max(...maValues);
+  const pos = (value) => max === min ? 50 : clamp(((value - min) / (max - min)) * 100, 4, 96);
   els.movingAverageBox.innerHTML = `
-    ${compactLevelRow("排列狀態", ordering, `價格站上 ${above}/3 條均線`)}
-    ${compactLevelRow("5 日均線", fmt(ma5), price >= ma5 ? "站上" : "跌破")}
-    ${compactLevelRow("10 日均線", fmt(ma10), ma10 ? (price >= ma10 ? "站上" : "跌破") : "資料不足")}
-    ${compactLevelRow("20 日均線", fmt(ma20), ma20 ? (price >= ma20 ? "站上" : "跌破") : "資料不足")}
+    <div class="maStatus ${ordering === "多頭排列" ? "bull" : ordering === "空頭排列" ? "bear" : "flat"}">${ordering}<small>價格站上 ${above}/3 條均線</small></div>
+    <div class="maChart">
+      <div class="maLine ma5"><span>MA5 ${fmt(ma5)}</span><i style="left:${pos(ma5)}%"></i></div>
+      <div class="maLine ma10"><span>MA10 ${fmt(ma10)}</span><i style="left:${ma10 ? pos(ma10) : 50}%"></i></div>
+      <div class="maLine ma20"><span>MA20 ${fmt(ma20)}</span><i style="left:${ma20 ? pos(ma20) : 50}%"></i></div>
+      <b style="left:${pos(price)}%">現價</b>
+    </div>
   `;
 }
 
@@ -649,13 +723,16 @@ function renderVolumeMultiple(selected, rows) {
     return;
   }
   const multiple = currentVolume / averageVolume;
-  const score = clamp(multiple * 35, 0, 100);
+  const score = clamp((multiple / 3) * 100, 0, 100);
   const label = multiple >= 2 ? "明顯放量" : multiple >= 1.2 ? "溫和放量" : multiple <= 0.65 ? "量縮" : "量能持平";
   els.volumeMultipleBox.innerHTML = `
-    ${compactLevelRow("量能狀態", label, `${fmt(multiple)} 倍`)}
+    <div class="volumeGauge">
+      <strong>${fmt(multiple)}x</strong><span>${label}</span>
+      <div class="volumeScale"><i style="left:${score}%"></i></div>
+      <div class="scaleTicks"><span>0.5x</span><span>1x</span><span>2x</span><span>3x</span></div>
+    </div>
     ${compactLevelRow("目前成交量", intFmt(currentVolume))}
     ${compactLevelRow("近 5 日均量", intFmt(averageVolume))}
-    <div class="positionTrack"><div style="width:${score}%"></div></div>
   `;
 }
 
@@ -668,10 +745,20 @@ function renderValuation(valid, selected) {
   const yieldRank = Number.isFinite(yieldRate) && yieldValues.length ? yieldValues.findIndex((value) => value <= yieldRate) + 1 : null;
   const peTone = !Number.isFinite(pe) ? "資料不足" : pe <= 12 ? "估值偏低" : pe <= 25 ? "估值中性" : "估值偏高";
   const yieldTone = !Number.isFinite(yieldRate) ? "資料不足" : yieldRate >= 5 ? "收益較高" : yieldRate >= 2.5 ? "收益中性" : "收益偏低";
+  const pePos = Number.isFinite(pe) ? clamp((pe / 40) * 100, 0, 100) : 50;
+  const yieldPos = Number.isFinite(yieldRate) ? clamp((yieldRate / 8) * 100, 0, 100) : 50;
   els.valuationBox.innerHTML = `
-    ${compactLevelRow("本益比", ratioFmt(pe), peRank ? `10 檔中第 ${peRank} 低` : peTone)}
-    ${compactLevelRow("殖利率", pct(yieldRate), yieldRank ? `10 檔中第 ${yieldRank} 高` : yieldTone)}
-    ${compactLevelRow("估值判讀", peTone, yieldTone)}
+    <div class="valuationMeter">
+      <span>本益比 ${ratioFmt(pe)}</span>
+      <div class="valuationTrack pe"><i style="left:${pePos}%"></i></div>
+      <small>低估 / 合理 / 偏高${peRank ? `，10 檔中第 ${peRank} 低` : ""}</small>
+    </div>
+    <div class="valuationMeter">
+      <span>殖利率 ${pct(yieldRate)}</span>
+      <div class="valuationTrack yield"><i style="left:${yieldPos}%"></i></div>
+      <small>偏低 / 中性 / 較高${yieldRank ? `，10 檔中第 ${yieldRank} 高` : ""}</small>
+    </div>
+    ${compactLevelRow("綜合", peTone, yieldTone)}
     <p class="miniNote">估值僅作觀測，不代表合理買賣價格。</p>
   `;
 }

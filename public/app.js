@@ -412,49 +412,145 @@ function drawCandlestickChart(ctx, width, height, rows) {
     return { ...row, open, high, low, close };
   }).filter((row) => Number.isFinite(row.close));
   if (!candles.length) return;
-  let min = Math.min(...candles.map((row) => row.low));
-  let max = Math.max(...candles.map((row) => row.high));
+
+  const maSeries = (field, length) => candles.map((_, index) => {
+    const slice = candles.slice(Math.max(0, index - length + 1), index + 1)
+      .map((row) => Number(row[field]))
+      .filter(Number.isFinite);
+    return slice.length ? avg(slice) : null;
+  });
+  const ma5 = maSeries("close", 5);
+  const ma20 = maSeries("close", 20);
+  const ma60 = maSeries("close", 60);
+  const volMa5 = maSeries("volume", 5);
+  const volMa20 = maSeries("volume", 20);
+  const volMa60 = maSeries("volume", 60);
+
+  const priceValues = [...candles.map((row) => row.low), ...candles.map((row) => row.high), ...ma5, ...ma20, ...ma60]
+    .filter((value) => Number.isFinite(Number(value)));
+  let min = Math.min(...priceValues);
+  let max = Math.max(...priceValues);
   if (min === max) { min -= 1; max += 1; }
   const spread = max - min;
   min -= spread * 0.08;
   max += spread * 0.08;
-  const pad = { left: 64, right: 28, top: 24, bottom: 48 };
+  const pad = { left: 76, right: 26, top: 54, bottom: 44 };
+  const priceH = Math.round(height * 0.62);
+  const volumeTop = priceH + 44;
+  const volumeH = height - volumeTop - pad.bottom;
   const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
   const xFor = (index) => pad.left + (plotW * index) / Math.max(1, candles.length - 1);
-  const yFor = (value) => pad.top + plotH - ((value - min) / (max - min)) * plotH;
-  ctx.font = "12px Microsoft JhengHei, Arial";
+  const priceY = (value) => pad.top + priceH - ((value - min) / (max - min)) * priceH;
+  const maxVolume = Math.max(1, ...candles.map((row) => Number(row.volume || 0)), ...volMa5, ...volMa20, ...volMa60);
+  const volumeY = (value) => volumeTop + volumeH - (Number(value || 0) / maxVolume) * volumeH;
+
+  ctx.fillStyle = "#05070d";
+  ctx.fillRect(0, 0, width, height);
   ctx.lineWidth = 1;
   ctx.textAlign = "right";
-  for (let index = 0; index <= 4; index += 1) {
-    const y = pad.top + (plotH * index) / 4;
-    const price = max - ((max - min) * index) / 4;
+  for (let index = 0; index <= 6; index += 1) {
+    const y = pad.top + (priceH * index) / 6;
+    const price = max - ((max - min) * index) / 6;
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(width - pad.right, y);
-    ctx.strokeStyle = "rgba(27, 117, 188, 0.45)";
+    ctx.strokeStyle = "rgba(150, 160, 180, 0.24)";
     ctx.stroke();
-    ctx.fillStyle = "#8cc9f7";
-    ctx.fillText(fmt(price), pad.left - 8, y + 4);
+    ctx.fillStyle = "#f1ff3d";
+    ctx.font = "28px Microsoft JhengHei, Arial";
+    ctx.fillText(fmt(price, 0), pad.left - 8, y + 9);
   }
-  const candleW = clamp(plotW / Math.max(8, candles.length) * 0.58, 10, 28);
+
+  const drawSeries = (values, color, yScale, lineWidth = 2) => {
+    ctx.beginPath();
+    values.forEach((value, index) => {
+      if (!Number.isFinite(Number(value))) return;
+      const x = xFor(index);
+      const y = yScale(value);
+      if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 5;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  };
+
+  const last = candles[candles.length - 1];
+  const arrow = (value, previous) => Number(value || 0) >= Number(previous || value) ? "↑" : "↓";
+  ctx.textAlign = "left";
+  ctx.font = "28px Microsoft JhengHei, Arial";
+  ctx.fillStyle = "#f1ff3d";
+  ctx.fillText(`均價5 ${fmt(ma5.at(-1))} ${arrow(ma5.at(-1), ma5.at(-2))}`, 0, 32);
+  ctx.fillStyle = "#ff23d7";
+  ctx.fillText(`均價20 ${fmt(ma20.at(-1))} ${arrow(ma20.at(-1), ma20.at(-2))}`, 280, 32);
+  ctx.fillStyle = "#20efe8";
+  ctx.fillText(`均價60 ${fmt(ma60.at(-1))} ${arrow(ma60.at(-1), ma60.at(-2))}`, 588, 32);
+
+  const candleW = clamp(plotW / Math.max(12, candles.length) * 0.58, 8, 22);
   candles.forEach((row, index) => {
     const x = xFor(index);
     const up = row.close >= row.open;
-    const color = up ? "#ff3333" : "#21d86b";
-    const bodyTop = yFor(Math.max(row.open, row.close));
-    const bodyBottom = yFor(Math.min(row.open, row.close));
+    const color = up ? "#ff1744" : "#00d084";
+    const bodyTop = priceY(Math.max(row.open, row.close));
+    const bodyBottom = priceY(Math.min(row.open, row.close));
     ctx.strokeStyle = color;
-    ctx.fillStyle = up ? "rgba(255, 51, 51, 0.72)" : "rgba(33, 216, 107, 0.72)";
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(x, yFor(row.high));
-    ctx.lineTo(x, yFor(row.low));
+    ctx.moveTo(x, priceY(row.high));
+    ctx.lineTo(x, priceY(row.low));
     ctx.stroke();
     ctx.fillRect(x - candleW / 2, bodyTop, candleW, Math.max(3, bodyBottom - bodyTop));
-    ctx.strokeRect(x - candleW / 2, bodyTop, candleW, Math.max(3, bodyBottom - bodyTop));
   });
+  drawSeries(ma5, "#f1ff3d", priceY, 2);
+  drawSeries(ma20, "#ff23d7", priceY, 2);
+  drawSeries(ma60, "#20efe8", priceY, 2);
+
+  const highIndex = candles.reduce((best, row, index) => row.high > candles[best].high ? index : best, 0);
+  const lowIndex = candles.reduce((best, row, index) => row.low < candles[best].low ? index : best, 0);
+  ctx.font = "24px Microsoft JhengHei, Arial";
+  ctx.fillStyle = "#ff1744";
   ctx.textAlign = "center";
-  ctx.fillStyle = "#8cc9f7";
+  ctx.fillText(fmt(candles[highIndex].high), xFor(highIndex), priceY(candles[highIndex].high) - 12);
+  ctx.fillStyle = "#00d084";
+  ctx.fillText(fmt(candles[lowIndex].low), xFor(lowIndex), priceY(candles[lowIndex].low) + 26);
+
+  ctx.strokeStyle = "rgba(150, 160, 180, 0.34)";
+  for (let index = 0; index <= 3; index += 1) {
+    const y = volumeTop + (volumeH * index) / 3;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.stroke();
+    ctx.fillStyle = "#f1ff3d";
+    ctx.textAlign = "right";
+    ctx.font = "24px Microsoft JhengHei, Arial";
+    const volumeLabel = maxVolume - (maxVolume * index) / 3;
+    ctx.fillText(volumeLabel >= 1000 ? `${Math.round(volumeLabel / 1000)}K` : intFmt(volumeLabel), pad.left - 8, y + 8);
+  }
+  ctx.textAlign = "left";
+  ctx.font = "25px Microsoft JhengHei, Arial";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(`成交量 ${intFmt(last.volume)} ${arrow(last.volume, candles.at(-2)?.volume)}`, 0, volumeTop - 14);
+  ctx.fillStyle = "#f1ff3d";
+  ctx.fillText(`均量5 ${intFmt(volMa5.at(-1))} ${arrow(volMa5.at(-1), volMa5.at(-2))}`, 250, volumeTop - 14);
+  ctx.fillStyle = "#ff23d7";
+  ctx.fillText(`均量20 ${intFmt(volMa20.at(-1))} ${arrow(volMa20.at(-1), volMa20.at(-2))}`, 520, volumeTop - 14);
+
+  candles.forEach((row, index) => {
+    const x = xFor(index);
+    const up = row.close >= row.open;
+    ctx.fillStyle = up ? "#ff1744" : "#00d084";
+    ctx.fillRect(x - candleW / 2, volumeY(row.volume), candleW, Math.max(2, volumeTop + volumeH - volumeY(row.volume)));
+  });
+  drawSeries(volMa5, "#f1ff3d", volumeY, 2);
+  drawSeries(volMa20, "#ff23d7", volumeY, 2);
+  drawSeries(volMa60, "#20efe8", volumeY, 2);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#f1ff3d";
+  ctx.font = "26px Microsoft JhengHei, Arial";
   const labelStep = Math.max(1, Math.ceil(candles.length / 7));
   candles.forEach((row, index) => {
     if (index % labelStep === 0 || index === candles.length - 1) ctx.fillText(chartLabel(row.date), xFor(index), height - 20);

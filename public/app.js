@@ -115,6 +115,12 @@ const els = {
   movingAverageBox: $("#movingAverageBox"),
   volumeMultipleBox: $("#volumeMultipleBox"),
   valuationBox: $("#valuationBox"),
+  marketTrendBox: $("#marketTrendBox"),
+  marketTrendMeta: $("#marketTrendMeta"),
+  marketPowerBox: $("#marketPowerBox"),
+  marketPowerMeta: $("#marketPowerMeta"),
+  sectorTideBox: $("#sectorTideBox"),
+  sectorTideMeta: $("#sectorTideMeta"),
 };
 
 function fmt(value, digits = 2) {
@@ -876,6 +882,111 @@ function renderValuation(valid, selected) {
   `;
 }
 
+function renderDonutSet(container, items, accent = "#1b75bc") {
+  container.innerHTML = items.map((item) => `
+    <div class="marketDonut">
+      <div class="donutRing" style="--value:${clamp(item.value, 0, 100)}; --accent:${item.color || accent};">
+        <strong>${Math.round(item.value)}%</strong>
+      </div>
+      <span>${item.label}</span>
+    </div>
+  `).join("");
+}
+
+function stockProfile(symbol) {
+  return recommendationUniverse.find((item) => item.symbol === symbol) || {
+    symbol,
+    name: symbol,
+    categories: ["balanced"],
+    type: "stock",
+    risk: 2,
+  };
+}
+
+function primarySector(symbol) {
+  const category = stockProfile(symbol).categories[0] || "balanced";
+  return {
+    semiconductor: "半導體",
+    finance: "金融",
+    highDividend: "高股息",
+    aiElectric: "AI 電子",
+    balanced: "大型權值",
+  }[category] || "其他";
+}
+
+function marketStats(valid, avgChange, focus, risk) {
+  const advancers = valid.filter((quote) => Number(quote.changePercent || 0) > 0).length;
+  const decliners = valid.filter((quote) => Number(quote.changePercent || 0) < 0).length;
+  const total = Math.max(1, valid.length);
+  const volumeTotal = valid.reduce((sum, quote) => sum + Number(quote.volume || 0), 0);
+  const buyPower = clamp(50 + avgChange * 10 + focus * 0.35, 0, 100);
+  const sellPower = clamp(50 - avgChange * 10 + (decliners / total) * 35, 0, 100);
+  return {
+    bigBuy: clamp(buyPower + Math.min(20, volumeTotal / 200000), 0, 100),
+    retailBuy: clamp(focus + 18, 0, 100),
+    retailSell: clamp(sellPower, 0, 100),
+    bigLong: clamp(buyPower + (100 - risk) * 0.16, 0, 100),
+    retailLong: clamp(50 + (advancers / total) * 42, 0, 100),
+    retailShort: clamp(sellPower + risk * 0.12, 0, 100),
+  };
+}
+
+function renderMarketOverview(valid, avgChange, focus, risk) {
+  const stats = marketStats(valid, avgChange, focus, risk);
+  renderDonutSet(els.marketTrendBox, [
+    { label: "大戶買盤", value: stats.bigBuy, color: "#ff3333" },
+    { label: "散戶買盤", value: stats.retailBuy, color: "#ff8c00" },
+    { label: "散戶賣壓", value: stats.retailSell, color: "#21d86b" },
+  ]);
+  renderDonutSet(els.marketPowerBox, [
+    { label: "大戶買盤", value: stats.bigLong, color: "#1b75bc" },
+    { label: "散戶買盤", value: stats.retailLong, color: "#1b75bc" },
+    { label: "散戶賣壓", value: stats.retailShort, color: "#1b75bc" },
+  ], "#1b75bc");
+  const level = stats.bigLong >= 75 ? "1 級區" : stats.bigLong >= 60 ? "2 級區" : stats.bigLong >= 45 ? "3 級區" : "4 級區";
+  const time = new Date().toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  els.marketTrendMeta.textContent = `資料時間：${time}`;
+  els.marketPowerMeta.textContent = `信號等級：${level}`;
+}
+
+function renderSectorTide(valid) {
+  const maxVolume = Math.max(1, ...valid.map((quote) => Number(quote.volume || 0)));
+  const sectors = new Map();
+  valid.forEach((quote) => {
+    const sector = primarySector(quote.symbol);
+    const change = Number(quote.changePercent || 0);
+    const volumeScore = Number(quote.volume || 0) / maxVolume;
+    const force = change * (0.7 + volumeScore);
+    if (!sectors.has(sector)) sectors.set(sector, { name: sector, count: 0, force: 0, volume: 0, symbols: [] });
+    const item = sectors.get(sector);
+    item.count += 1;
+    item.force += force;
+    item.volume += Number(quote.volume || 0);
+    item.symbols.push(quote.symbol);
+  });
+  const list = [...sectors.values()].map((item) => {
+    const avgForce = item.force / Math.max(1, item.count);
+    const acceleration = avgForce - avg(valid.map((quote) => Number(quote.changePercent || 0))) * 0.55;
+    return { ...item, avgForce, acceleration };
+  });
+  const strongest = list.sort((a, b) => b.avgForce - a.avgForce)[0];
+  els.sectorTideBox.innerHTML = `
+    <div class="tideAxis horizontal"><span>加速流出</span><span>資金流入</span></div>
+    <div class="tideAxis vertical"><span>流出但放緩</span><span>加速流入</span></div>
+    ${list.map((item) => {
+      const x = clamp(50 + item.avgForce * 9, 8, 92);
+      const y = clamp(50 - item.acceleration * 11, 10, 90);
+      const size = clamp(48 + Math.sqrt(Math.max(0, item.volume)) / 28, 48, 96);
+      const hot = item.avgForce > 0 ? "inflow" : "outflow";
+      const label = `${item.avgForce >= 0 ? "+" : ""}${fmt(item.avgForce)}%`;
+      return `<div class="tideBubble ${hot}" style="left:${x}%; top:${y}%; width:${size}px; height:${size}px;"><strong>${item.name}</strong><span>${label}</span></div>`;
+    }).join("")}
+  `;
+  els.sectorTideMeta.textContent = strongest
+    ? `法人資金流向推估：${strongest.name} 相對偏強，成分 ${strongest.symbols.join("、")}。`
+    : "法人資金流向推估：尚無足夠資料。";
+}
+
 function drawRadar(values) {
   const canvas = els.radarChart;
   const ctx = canvas.getContext("2d");
@@ -941,6 +1052,8 @@ function renderDashboard() {
   renderMovingAverages(selected, selectedRows);
   renderVolumeMultiple(selected, selectedRows);
   renderValuation(valid, selected);
+  renderMarketOverview(valid, avgChange, focus, risk);
+  renderSectorTide(valid);
   els.boardDate.textContent = new Date().toLocaleDateString("zh-TW");
   els.boardTime.textContent = new Date().toLocaleTimeString("zh-TW", { hour12: false });
   renderBars(els.intentBars, [

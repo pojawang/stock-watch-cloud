@@ -175,6 +175,63 @@ canvas { width: 100%; height: auto; border: 1px solid #123b5e; border-radius: 6p
 .valuationTrack.yield { background: linear-gradient(90deg, var(--red), var(--yellow), var(--green)); }
 .valuationMeter span { color: var(--yellow); font-weight: 700; }
 .valuationMeter small { color: var(--muted); }
+.marketDonutGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center; margin-top: 12px; }
+.marketDonut { display: grid; justify-items: center; gap: 8px; min-width: 0; }
+.marketDonut span { color: var(--text); font-size: 13px; text-align: center; }
+.donutRing {
+  --value: 0;
+  --accent: var(--cyan);
+  width: 82px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--accent) calc(var(--value) * 1%), rgba(210, 225, 235, 0.2) 0);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent), transparent 55%);
+  position: relative;
+}
+.donutRing::after { content: ""; position: absolute; inset: 13px; border-radius: 50%; background: #f6f9fc; box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.12); }
+.donutRing strong { position: relative; z-index: 1; color: #101820; font-size: 20px; }
+.marketMeta { margin-top: 12px; border: 1px solid rgba(27, 117, 188, 0.45); border-radius: 6px; padding: 8px 10px; color: var(--text); text-align: center; background: rgba(255, 255, 255, 0.04); }
+.tideTile { min-height: 410px; }
+.sectorTide {
+  position: relative;
+  min-height: 320px;
+  border: 1px solid rgba(27, 117, 188, 0.55);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 28% 25%, rgba(255, 255, 255, 0.08), transparent 20%),
+    radial-gradient(circle at 74% 38%, rgba(255, 216, 77, 0.12), transparent 18%),
+    linear-gradient(90deg, rgba(33, 216, 107, 0.12), transparent 48%, rgba(255, 51, 51, 0.12)),
+    #03070d;
+}
+.sectorTide::before, .sectorTide::after { content: ""; position: absolute; background: rgba(140, 201, 247, 0.32); }
+.sectorTide::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+.sectorTide::after { left: 0; right: 0; top: 50%; height: 1px; }
+.tideAxis { position: absolute; z-index: 1; color: var(--muted); font-size: 13px; pointer-events: none; }
+.tideAxis.horizontal { left: 16px; right: 16px; bottom: 14px; display: flex; justify-content: space-between; }
+.tideAxis.vertical { top: 12px; bottom: 42px; left: 14px; display: flex; flex-direction: column; justify-content: space-between; }
+.tideAxis.vertical span:last-child { align-self: flex-end; margin-left: 14px; }
+.tideBubble {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  color: #fff;
+  text-align: center;
+  padding: 8px;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.16);
+}
+.tideBubble strong { font-size: 13px; line-height: 1.1; }
+.tideBubble span { font-size: 12px; }
+.tideBubble.inflow { background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.28), transparent 26%), rgba(255, 51, 51, 0.72); }
+.tideBubble.outflow { background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.25), transparent 26%), rgba(33, 216, 107, 0.65); }
 .gaugeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .gauge { min-height: 84px; border: 1px solid #5c4a16; border-radius: 999px; display: grid; place-items: center; color: var(--yellow); background: radial-gradient(circle, #101010 45%, #312506 46%, #050505 70%); text-align: center; }
 .gauge strong { display: block; font-size: 24px; }

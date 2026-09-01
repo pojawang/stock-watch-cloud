@@ -971,6 +971,7 @@ function renderSectorTide(valid) {
   });
   const strongest = list.sort((a, b) => b.avgForce - a.avgForce)[0];
   els.sectorTideBox.innerHTML = `
+    <div class="tideCurrent"></div>
     <div class="tideAxis horizontal"><span>加速流出</span><span>資金流入</span></div>
     <div class="tideAxis vertical"><span>流出但放緩</span><span>加速流入</span></div>
     ${list.map((item) => {
@@ -979,7 +980,11 @@ function renderSectorTide(valid) {
       const size = clamp(48 + Math.sqrt(Math.max(0, item.volume)) / 28, 48, 96);
       const hot = item.avgForce > 0 ? "inflow" : "outflow";
       const label = `${item.avgForce >= 0 ? "+" : ""}${fmt(item.avgForce)}%`;
-      return `<div class="tideBubble ${hot}" style="left:${x}%; top:${y}%; width:${size}px; height:${size}px;"><strong>${item.name}</strong><span>${label}</span></div>`;
+      const driftX = clamp(item.avgForce * 2.2, -18, 18);
+      const driftY = clamp(item.acceleration * -2.4, -18, 18);
+      const speed = clamp(7 - Math.abs(item.avgForce) * 0.35, 3.8, 7.5);
+      const delay = (item.name.charCodeAt(0) % 7) * -0.45;
+      return `<div class="tideBubble ${hot}" style="left:${x}%; top:${y}%; width:${size}px; height:${size}px; --drift-x:${driftX}px; --drift-y:${driftY}px; --speed:${speed}s; --delay:${delay}s;"><strong>${item.name}</strong><span>${label}</span></div>`;
     }).join("")}
   `;
   els.sectorTideMeta.textContent = strongest

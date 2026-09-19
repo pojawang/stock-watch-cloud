@@ -129,14 +129,24 @@ const els = {
   proDataMeta: $("#proDataMeta"),
   proKChart: $("#proKChart"),
   proDecisionCore: $("#proDecisionCore"),
+  proMultiRadar: $("#proMultiRadar"),
   proMultiRead: $("#proMultiRead"),
   proHeatMap: $("#proHeatMap"),
   proRiskRadar: $("#proRiskRadar"),
+  proRiskText: $("#proRiskText"),
   proPredictionChart: $("#proPredictionChart"),
-  proCapitalFlow: $("#proCapitalFlow"),
-  proValuation: $("#proValuation"),
+  proCostDistribution: $("#proCostDistribution"),
+  proCostText: $("#proCostText"),
+  proInstitutional: $("#proInstitutional"),
+  proOvernightRisk: $("#proOvernightRisk"),
+  proEnergy: $("#proEnergy"),
+  proHealth: $("#proHealth"),
+  proSignal: $("#proSignal"),
+  proSentiment: $("#proSentiment"),
   proConfidence: $("#proConfidence"),
-  proSectorFlow: $("#proSectorFlow"),
+  proChipSummary: $("#proChipSummary"),
+  proBuyingPower: $("#proBuyingPower"),
+  proStrength: $("#proStrength"),
   proConclusion: $("#proConclusion"),
   proExportCsv: $("#proExportCsv"),
   proPrint: $("#proPrint"),
@@ -1062,6 +1072,94 @@ function renderProBars(container, items) {
   }).join("");
 }
 
+function drawProRadar(canvas, values, labels, accent = "#ff6259") {
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const cx = width / 2;
+  const cy = height / 2 + 8;
+  const radius = Math.min(width, height) * 0.31;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#090d16";
+  ctx.fillRect(0, 0, width, height);
+  for (let ring = 1; ring <= 4; ring += 1) {
+    ctx.beginPath();
+    labels.forEach((_, index) => {
+      const angle = -Math.PI / 2 + Math.PI * 2 * index / labels.length;
+      const x = cx + Math.cos(angle) * radius * ring / 4;
+      const y = cy + Math.sin(angle) * radius * ring / 4;
+      if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(82, 129, 177, 0.34)";
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    const angle = -Math.PI / 2 + Math.PI * 2 * index / labels.length;
+    const x = cx + Math.cos(angle) * radius * clamp(value, 0, 100) / 100;
+    const y = cy + Math.sin(angle) * radius * clamp(value, 0, 100) / 100;
+    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = `${accent}35`;
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#9bb2d2";
+  ctx.font = "13px Microsoft JhengHei, Arial";
+  ctx.textAlign = "center";
+  labels.forEach((label, index) => {
+    const angle = -Math.PI / 2 + Math.PI * 2 * index / labels.length;
+    ctx.fillText(label, cx + Math.cos(angle) * (radius + 30), cy + Math.sin(angle) * (radius + 22));
+  });
+}
+
+function drawProCostDistribution(canvas, rows) {
+  const ctx = canvas.getContext("2d");
+  const closes = rows.map((row) => Number(row.close)).filter(Number.isFinite);
+  const costs = weightedCostValues(rows).filter(Number.isFinite);
+  const all = [...closes, ...costs];
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#090d16";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!all.length) return;
+  let min = Math.min(...all);
+  let max = Math.max(...all);
+  if (min === max) { min -= 1; max += 1; }
+  const pad = { left: 58, right: 18, top: 24, bottom: 38 };
+  const x = (index) => pad.left + (canvas.width - pad.left - pad.right) * index / Math.max(1, closes.length - 1);
+  const y = (value) => pad.top + (canvas.height - pad.top - pad.bottom) * (1 - (value - min) / (max - min));
+  for (let index = 0; index <= 4; index += 1) {
+    const lineY = pad.top + (canvas.height - pad.top - pad.bottom) * index / 4;
+    ctx.beginPath(); ctx.moveTo(pad.left, lineY); ctx.lineTo(canvas.width - pad.right, lineY);
+    ctx.strokeStyle = "rgba(67, 111, 156, .3)"; ctx.stroke();
+  }
+  const draw = (values, color, fill = false) => {
+    ctx.beginPath();
+    values.forEach((value, index) => index ? ctx.lineTo(x(index), y(value)) : ctx.moveTo(x(index), y(value)));
+    if (fill) {
+      ctx.lineTo(x(values.length - 1), canvas.height - pad.bottom);
+      ctx.lineTo(x(0), canvas.height - pad.bottom);
+      ctx.closePath(); ctx.fillStyle = `${color}22`; ctx.fill();
+      ctx.beginPath();
+      values.forEach((value, index) => index ? ctx.lineTo(x(index), y(value)) : ctx.moveTo(x(index), y(value)));
+    }
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.shadowColor = color; ctx.shadowBlur = 5; ctx.stroke(); ctx.shadowBlur = 0;
+  };
+  draw(closes, "#638ff3", true);
+  draw(costs, "#ffd84d");
+  ctx.fillStyle = "#91a8c7"; ctx.font = "12px Microsoft JhengHei, Arial"; ctx.textAlign = "left";
+  ctx.fillText("收盤價", pad.left, canvas.height - 12);
+  ctx.fillStyle = "#ffd84d"; ctx.fillText("量價成本線", pad.left + 72, canvas.height - 12);
+}
+
+function proDonut(label, value, color) {
+  const score = Math.round(clamp(value, 0, 100));
+  return `<div class="proDonut"><div style="--value:${score};--accent:${color}"><strong>${score}%</strong></div><span>${label}</span></div>`;
+}
+
 function renderProDashboard() {
   if (!els.proDashboardPanel) return;
   const valid = state.quotes.filter((quote) => quote.status === "ok" && Number.isFinite(Number(quote.price)));
@@ -1082,6 +1180,8 @@ function renderProDashboard() {
   const momentum = clamp(50 + change * 10 + (volumeRatio - 0.4) * 20, 0, 100);
   const breadth = clamp(valid.filter((quote) => Number(quote.changePercent || 0) > 0).length / Math.max(1, valid.length) * 100, 0, 100);
   const confidence = clamp(avg([trend, momentum, breadth, 100 - risk]), 0, 100);
+  const mainForce = clamp(50 + change * 7 + (volumeRatio - 0.4) * 30, 0, 100);
+  const flow = clamp(50 + avgChange * 9, 0, 100);
   const lastDate = selected.tradeDate || rows.at(-1)?.date || "-";
 
   els.proStockName.textContent = selected.name || selected.symbol;
@@ -1101,22 +1201,14 @@ function renderProDashboard() {
   els.proDecisionCore.innerHTML = `
     <div class="proDecisionBadge ${risk >= 70 ? "danger" : trend >= 58 ? "positive" : "caution"}">${decisionTone}</div>
     <dl><div><dt>趨勢判斷</dt><dd>${trend >= 58 ? "偏多" : trend <= 42 ? "偏空" : "盤整"}</dd></div><div><dt>量價狀態</dt><dd>${volumeRatio >= 0.7 ? "量能活躍" : "量能一般"}</dd></div><div><dt>市場廣度</dt><dd>${Math.round(breadth)} / 100</dd></div><div><dt>風險等級</dt><dd>${Math.round(risk)} / 100</dd></div></dl>`;
-  renderProBars(els.proMultiRead, [
-    { label: "趨勢", value: trend, tone: "red" }, { label: "動能", value: momentum, tone: "yellow" },
-    { label: "量能", value: volumeRatio * 100, tone: "green" }, { label: "市場廣度", value: breadth, tone: "blue" },
-    { label: "穩定度", value: 100 - risk, tone: "cyan" },
-  ]);
+  drawProRadar(els.proMultiRadar, [trend, momentum, mainForce, volumeRatio * 100, 100 - risk], ["趨勢", "動能", "主力", "量能", "穩定"], "#ff6259");
+  els.proMultiRead.innerHTML = `<strong>綜合評分 ${Math.round(confidence)} / 100</strong><span>${confidence >= 65 ? "A 級" : confidence >= 50 ? "B 級" : "C 級"}</span>`;
 
-  const heat = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 10);
-  els.proHeatMap.innerHTML = heat.map((quote) => {
-    const quoteChange = Number(quote.changePercent || 0);
-    const intensity = clamp(Math.abs(quoteChange) / 6, 0.18, 1);
-    return `<div class="heatCell ${quoteChange >= 0 ? "hot" : "cold"}" style="--heat:${intensity}"><strong>${quote.symbol}</strong><span>${pct(quoteChange)}</span><small>${intFmt(quote.volume)}</small></div>`;
-  }).join("");
-  renderProBars(els.proRiskRadar, [
-    { label: "價格波動", value: risk, tone: "red" }, { label: "量能集中", value: volumeRatio * 100, tone: "yellow" },
-    { label: "趨勢反轉", value: 100 - trend, tone: "green" }, { label: "隔日沖推估", value: clamp(risk * 0.72 + volumeRatio * 20, 0, 100), tone: "red" },
-  ]);
+  const heatRows = rows.slice(-20);
+  const maxHeatVolume = Math.max(1, ...heatRows.map((row) => Number(row.volume || 0)));
+  els.proHeatMap.innerHTML = heatRows.slice(-10).reverse().map((row) => `<div class="heatBand"><span>${fmt(row.close)}</span><i style="width:${clamp(Number(row.volume || 0) / maxHeatVolume * 100, 8, 100)}%"></i><small>${intFmt(row.volume)}</small></div>`).join("");
+  drawProRadar(els.proRiskRadar, [risk, 100 - trend, volumeRatio * 100, Math.abs(change) * 15, 100 - confidence], ["波動", "反轉", "流動", "跳空", "模型"], "#e86a5f");
+  els.proRiskText.innerHTML = `<strong>主力風險指數：${risk >= 70 ? "高" : risk >= 45 ? "中" : "低"}</strong><span>${Math.round(risk)}%</span>`;
 
   const closeValues = rows.map((row) => Number(row.close)).filter(Number.isFinite);
   const predCtx = els.proPredictionChart.getContext("2d");
@@ -1125,9 +1217,29 @@ function renderProDashboard() {
   predCtx.fillRect(0, 0, els.proPredictionChart.width, els.proPredictionChart.height);
   drawLine(predCtx, els.proPredictionChart.width, els.proPredictionChart.height, closeValues, rows.map((row) => chartLabel(row.date)), "#ffd84d", true, true);
 
-  els.proCapitalFlow.innerHTML = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 7).map((quote) => `
-    <div class="capitalRow"><strong>${quote.symbol}</strong><span>${quote.name || "-"}</span><i class="${trendClass(quote.change)}">${pct(quote.changePercent)}</i><b>${intFmt(quote.volume)}</b></div>`).join("");
-  els.proValuation.innerHTML = `<dl><div><dt>本益比</dt><dd>${ratioFmt(selected.peRatio)}</dd></div><div><dt>殖利率</dt><dd>${pct(selected.dividendYield)}</dd></div><div><dt>目前價格</dt><dd>${fmt(selected.price)}</dd></div><div><dt>相對昨收</dt><dd class="${trendClass(selected.change)}">${pct(selected.changePercent)}</dd></div></dl>`;
+  drawProCostDistribution(els.proCostDistribution, rows);
+  const costValues = weightedCostValues(rows);
+  const latestCost = costValues.at(-1) || Number(selected.price || 0);
+  els.proCostText.innerHTML = `<strong>主力平均成本 ${fmt(latestCost)}</strong><span>現價偏離 ${pct(latestCost ? (Number(selected.price) - latestCost) / latestCost * 100 : 0)}</span>`;
+
+  const institutional = [
+    ["外資動能", clamp(50 + change * 7, 0, 100), change >= 0 ? "偏買" : "偏賣"],
+    ["投信動能", clamp(50 + momentum - 50, 0, 100), momentum >= 50 ? "偏買" : "偏賣"],
+    ["自營商動能", clamp(50 + avgChange * 10, 0, 100), avgChange >= 0 ? "偏買" : "偏賣"],
+  ];
+  els.proInstitutional.innerHTML = `<div class="institutionChart">${institutional.map(([label, value]) => `<div><span>${label}</span><i class="${value >= 50 ? "buy" : "sell"}" style="--value:${value}%"></i><strong>${Math.round(value)}</strong></div>`).join("")}</div><div class="institutionTable">${institutional.map(([label, value, tag]) => `<div><span>${label}</span><strong class="${value >= 50 ? "up" : "down"}">${tag}</strong><small>${Math.round(value)} 分</small></div>`).join("")}</div>`;
+  renderProBars(els.proOvernightRisk, [
+    { label: "主力賣出異常", value: risk, tone: "red" }, { label: "籌碼換手率", value: volumeRatio * 100, tone: "red" },
+    { label: "沖銷比例", value: clamp(risk * 0.65 + volumeRatio * 25, 0, 100), tone: "red" }, { label: "開高回落", value: clamp(100 - trend, 0, 100), tone: "yellow" },
+  ]);
+  const bull = clamp(avg([trend, momentum, breadth]), 0, 100);
+  els.proEnergy.innerHTML = `<div class="energyPair"><div><span>多方能量</span><i style="--value:${bull}%"></i><strong>${Math.round(bull)}%</strong></div><div><span>空方能量</span><i class="bear" style="--value:${100 - bull}%"></i><strong>${Math.round(100 - bull)}%</strong></div></div><p>多空比：${fmt(bull / Math.max(1, 100 - bull))} 倍</p>`;
+  const healthItems = [["籌碼", mainForce], ["技術", trend], ["資金", flow], ["波動", 100 - risk], ["支撐", confidence]];
+  els.proHealth.innerHTML = healthItems.map(([label, value], index) => proDonut(label, value, ["#55d782", "#f0be52", "#638ff3", "#ff6b61", "#55d782"][index])).join("");
+  const signalColor = risk > 70 ? "red" : confidence > 60 ? "green" : "yellow";
+  els.proSignal.innerHTML = `<div class="signalTower"><i class="red ${signalColor === "red" ? "on" : ""}"></i><i class="yellow ${signalColor === "yellow" ? "on" : ""}"></i><i class="green ${signalColor === "green" ? "on" : ""}"></i></div><strong>${signalColor === "red" ? "風險升高" : signalColor === "green" ? "動能轉強" : "等待確認"}</strong>`;
+  const sentiment = Math.round(clamp(avg([trend, flow, breadth, 100 - risk]), 0, 100));
+  els.proSentiment.innerHTML = `<div class="semiArc" style="--value:${sentiment}"><strong>${sentiment > 70 ? "貪婪" : sentiment < 35 ? "恐懼" : "中性"}</strong><span>${sentiment}/100</span></div><p>散戶情緒 ${Math.round(breadth)}%｜主力情緒 ${Math.round(mainForce)}%</p>`;
   renderProBars(els.proConfidence, [
     { label: "AI 信心", value: confidence, tone: "blue" }, { label: "資料完整", value: clamp(rows.length / 60 * 100, 20, 100), tone: "cyan" },
     { label: "訊號穩定", value: 100 - risk, tone: "green" }, { label: "策略適用", value: avg([confidence, 100 - risk]), tone: "yellow" },
@@ -1143,9 +1255,11 @@ function renderProDashboard() {
     sectorMap.set(sector, item);
   });
   const sectors = [...sectorMap.values()].map((item) => ({ ...item, score: item.change / item.count })).sort((a, b) => b.score - a.score);
-  const maxSectorVolume = Math.max(1, ...sectors.map((item) => item.volume));
-  els.proSectorFlow.innerHTML = sectors.slice(0, 7).map((item) => `<div class="sectorFlowRow"><span>${item.name}</span><div><i class="${item.score >= 0 ? "in" : "out"}" style="width:${clamp(item.volume / maxSectorVolume * 100, 8, 100)}%"></i></div><strong class="${trendClass(item.score)}">${item.score >= 0 ? "+" : ""}${fmt(item.score)}%</strong></div>`).join("");
-  els.proConclusion.innerHTML = `<strong>${selected.symbol} ${selected.name || ""}：${decisionTone}</strong><p>目前趨勢 ${Math.round(trend)} 分、動能 ${Math.round(momentum)} 分、風險 ${Math.round(risk)} 分，市場上漲家數比重 ${Math.round(breadth)}%。</p><p>${sectors[0] ? `${sectors[0].name}為目前相對強勢板塊。` : "板塊資料累積中。"} 本頁為規則式觀測，不構成投資建議。</p>`;
+  const strongest = sectors[0];
+  els.proChipSummary.innerHTML = `<dl><div><dt>量價結構</dt><dd class="${change >= 0 ? "up" : "down"}">${change >= 0 ? "偏多" : "偏空"}</dd></div><div><dt>強勢板塊</dt><dd>${strongest?.name || "-"}</dd></div><div><dt>成本偏離</dt><dd>${pct(latestCost ? (Number(selected.price) - latestCost) / latestCost * 100 : 0)}</dd></div><div><dt>估值觀測</dt><dd>PE ${ratioFmt(selected.peRatio)}</dd></div></dl>`;
+  els.proBuyingPower.innerHTML = proDonut("大戶買盤", mainForce, "#ef625b") + proDonut("散戶買盤", breadth, "#e6b84a") + proDonut("散戶賣壓", 100 - breadth, "#52cb7a");
+  els.proStrength.innerHTML = proDonut("多方強度", bull, "#ef625b") + proDonut("空方強度", 100 - bull, "#52cb7a") + proDonut("量能強度", volumeRatio * 100, "#638ff3");
+  els.proConclusion.innerHTML = `<div class="proVerdict"><span>主力語意</span><strong>${mainForce >= 65 ? "積極承接" : mainForce <= 38 ? "調節減碼" : "中性觀察"}</strong></div><div class="proVerdictTags"><span>${risk >= 65 ? "高波動" : "風險可控"}</span><span>${trend >= 55 ? "趨勢偏多" : "趨勢整理"}</span><span>${confidence >= 60 ? "信心較高" : "等待確認"}</span></div><p>${selected.symbol} ${selected.name || ""}目前趨勢 ${Math.round(trend)} 分、主力動能 ${Math.round(mainForce)} 分、風險 ${Math.round(risk)} 分；${strongest ? `${strongest.name}為相對強勢板塊。` : "板塊資料累積中。"}</p><small>本頁依即時報價與歷史快照進行規則式推估，不構成投資建議；法人數值並非交易所正式買賣超。</small>`;
 }
 
 function setProDashboard(open) {

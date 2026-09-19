@@ -26,6 +26,7 @@
     <div class="actions">
       <span id="userBadge" class="userBadge">-</span>
       <button id="refreshBtn" class="primary">立即刷新</button>
+      <button id="proDashboardToggle">綜合儀表板</button>
       <button id="settingsToggle">投資建議</button>
       <button id="usersToggle" class="hidden">帳號管理</button>
       <button id="logoutBtn">登出</button>
@@ -104,6 +105,79 @@
       </form>
       <div id="usersList" class="usersList"></div>
       <p id="usersMessage" class="message"></p>
+    </section>
+
+    <section id="proDashboardPanel" class="proDashboardPanel hidden">
+      <div class="proCommandBar">
+        <div class="proSystemSignals" aria-label="系統狀態">
+          <span class="signal active"><i></i>AI 掃描中</span>
+          <span class="signal"><i></i>主力追蹤</span>
+          <span class="signal"><i></i>市場狀態</span>
+          <span class="signal alert"><i></i>波動警示</span>
+        </div>
+        <div class="proIdentity">
+          <select id="proSymbol" aria-label="綜合儀表板股票代號"></select>
+          <strong id="proStockName">-</strong>
+          <span>綜合分析</span>
+        </div>
+        <div id="proSummaryStats" class="proSummaryStats"></div>
+      </div>
+      <div class="proSubbar">
+        <div>
+          <strong>資料來源：台股即時報價與個人歷史快照</strong>
+          <span id="proDataMeta">資料準備中</span>
+        </div>
+        <div class="proTools">
+          <button id="proExportCsv" type="button">下載資料 CSV</button>
+          <button id="proPrint" type="button">列印 / PDF</button>
+        </div>
+      </div>
+      <div class="proGrid">
+        <article class="proCard proHeroCard">
+          <div class="proCardHead"><span class="proNo">01</span><h2>主 K 線與均價線</h2><small>價量趨勢</small></div>
+          <canvas id="proKChart" width="1200" height="620"></canvas>
+        </article>
+        <article class="proCard">
+          <div class="proCardHead"><span class="proNo">02</span><h2>AI 決策核心</h2></div>
+          <div id="proDecisionCore" class="proDecisionCore"></div>
+        </article>
+        <article class="proCard">
+          <div class="proCardHead"><span class="proNo">03</span><h2>多維度判讀</h2></div>
+          <div id="proMultiRead" class="proBarStack"></div>
+        </article>
+        <article class="proCard">
+          <div class="proCardHead"><span class="proNo">04</span><h2>AI 籌碼熱區</h2></div>
+          <div id="proHeatMap" class="proHeatMap"></div>
+        </article>
+        <article class="proCard">
+          <div class="proCardHead"><span class="proNo">05</span><h2>風險雷達</h2></div>
+          <div id="proRiskRadar" class="proBarStack"></div>
+        </article>
+        <article class="proCard proWideCard">
+          <div class="proCardHead"><span class="proNo">06</span><h2>AI 預測路徑</h2><small>規則式趨勢推估</small></div>
+          <canvas id="proPredictionChart" width="780" height="300"></canvas>
+        </article>
+        <article class="proCard proWideCard">
+          <div class="proCardHead"><span class="proNo">07</span><h2>市場資金動能</h2></div>
+          <div id="proCapitalFlow" class="proCapitalFlow"></div>
+        </article>
+        <article class="proCard">
+          <div class="proCardHead"><span class="proNo">08</span><h2>估值與基本面</h2></div>
+          <div id="proValuation" class="proDecisionCore"></div>
+        </article>
+        <article class="proCard">
+          <div class="proCardHead"><span class="proNo">09</span><h2>AI 信心維度</h2></div>
+          <div id="proConfidence" class="proBarStack"></div>
+        </article>
+        <article class="proCard proTideCard">
+          <div class="proCardHead"><span class="proNo">10</span><h2>板塊輪動摘要</h2><small>流入與流出</small></div>
+          <div id="proSectorFlow" class="proSectorFlow"></div>
+        </article>
+        <article class="proCard proConclusionCard">
+          <div class="proCardHead"><span class="proNo">11</span><h2>綜合研判</h2></div>
+          <div id="proConclusion" class="proConclusion"></div>
+        </article>
+      </div>
     </section>
 
     <section class="metricGrid">
@@ -208,6 +282,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=13"></script>
+  <script src="/app.js?v=14"></script>
 </body>
 </html>

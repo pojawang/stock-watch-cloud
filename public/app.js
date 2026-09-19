@@ -51,6 +51,7 @@ const els = {
   statusText: $("#statusText"),
   userBadge: $("#userBadge"),
   refreshBtn: $("#refreshBtn"),
+  proDashboardToggle: $("#proDashboardToggle"),
   settingsToggle: $("#settingsToggle"),
   usersToggle: $("#usersToggle"),
   logoutBtn: $("#logoutBtn"),
@@ -121,6 +122,24 @@ const els = {
   marketPowerMeta: $("#marketPowerMeta"),
   sectorTideBox: $("#sectorTideBox"),
   sectorTideMeta: $("#sectorTideMeta"),
+  proDashboardPanel: $("#proDashboardPanel"),
+  proSymbol: $("#proSymbol"),
+  proStockName: $("#proStockName"),
+  proSummaryStats: $("#proSummaryStats"),
+  proDataMeta: $("#proDataMeta"),
+  proKChart: $("#proKChart"),
+  proDecisionCore: $("#proDecisionCore"),
+  proMultiRead: $("#proMultiRead"),
+  proHeatMap: $("#proHeatMap"),
+  proRiskRadar: $("#proRiskRadar"),
+  proPredictionChart: $("#proPredictionChart"),
+  proCapitalFlow: $("#proCapitalFlow"),
+  proValuation: $("#proValuation"),
+  proConfidence: $("#proConfidence"),
+  proSectorFlow: $("#proSectorFlow"),
+  proConclusion: $("#proConclusion"),
+  proExportCsv: $("#proExportCsv"),
+  proPrint: $("#proPrint"),
 };
 
 function fmt(value, digits = 2) {
@@ -193,6 +212,7 @@ async function api(path, options = {}) {
 function showLogin(message = "") {
   state.user = null;
   if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+  setProDashboard(false);
   els.loginView.classList.remove("hidden");
   els.appHeader.classList.add("hidden");
   els.appMain.classList.add("hidden");
@@ -310,8 +330,10 @@ function renderSettings() {
   const currentSingle = els.singleStockSymbol.value;
   els.chartSymbol.innerHTML = state.symbols.map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("");
   els.singleStockSymbol.innerHTML = state.symbols.map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("");
+  els.proSymbol.innerHTML = state.symbols.map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("");
   if (state.symbols.includes(current)) els.chartSymbol.value = current;
   if (state.symbols.includes(currentSingle)) els.singleStockSymbol.value = currentSingle;
+  if (state.symbols.includes(current)) els.proSymbol.value = current;
 }
 
 function recommendationRiskLevel(value) {
@@ -1033,6 +1055,121 @@ function drawRadar(values) {
   });
 }
 
+function renderProBars(container, items) {
+  container.innerHTML = items.map(({ label, value, text, tone = "cyan" }) => {
+    const score = clamp(Number(value || 0), 0, 100);
+    return `<div class="proBarRow"><div><span>${label}</span><strong>${text || `${Math.round(score)}%`}</strong></div><div class="proBarTrack"><i class="${tone}" style="width:${score}%"></i></div></div>`;
+  }).join("");
+}
+
+function renderProDashboard() {
+  if (!els.proDashboardPanel) return;
+  const valid = state.quotes.filter((quote) => quote.status === "ok" && Number.isFinite(Number(quote.price)));
+  const symbol = els.proSymbol.value || selectedSymbol() || valid[0]?.symbol;
+  const selected = valid.find((quote) => quote.symbol === symbol) || valid[0];
+  if (!selected) return;
+  if (els.proSymbol.value !== selected.symbol) els.proSymbol.value = selected.symbol;
+
+  let rows = rowsForSymbol(selected.symbol).slice(-66);
+  if (rows.length < 4) rows = syntheticRowsFromQuote(selected);
+  const changes = valid.map((quote) => Number(quote.changePercent || 0));
+  const avgChange = avg(changes);
+  const maxVolume = Math.max(1, ...valid.map((quote) => Number(quote.volume || 0)));
+  const volumeRatio = Number(selected.volume || 0) / maxVolume;
+  const change = Number(selected.changePercent || 0);
+  const risk = clamp(Math.abs(change) * 12 + volumeRatio * 36, 0, 100);
+  const trend = clamp(50 + change * 8, 0, 100);
+  const momentum = clamp(50 + change * 10 + (volumeRatio - 0.4) * 20, 0, 100);
+  const breadth = clamp(valid.filter((quote) => Number(quote.changePercent || 0) > 0).length / Math.max(1, valid.length) * 100, 0, 100);
+  const confidence = clamp(avg([trend, momentum, breadth, 100 - risk]), 0, 100);
+  const lastDate = selected.tradeDate || rows.at(-1)?.date || "-";
+
+  els.proStockName.textContent = selected.name || selected.symbol;
+  els.proDataMeta.textContent = `最新交易日 ${lastDate}｜歷史資料 ${rows.length} 筆｜更新 ${selected.tradeTime || "-"}`;
+  const summaryItems = [
+    ["成交價", fmt(selected.price)], ["漲跌", fmt(selected.change)], ["漲幅", pct(selected.changePercent)],
+    ["成交量", intFmt(selected.volume)], ["昨收", fmt(selected.previousClose)], ["開盤", fmt(selected.open)],
+    ["最高", fmt(selected.high)], ["最低", fmt(selected.low)], ["本益比", ratioFmt(selected.peRatio)], ["殖利率", pct(selected.dividendYield)],
+  ];
+  els.proSummaryStats.innerHTML = summaryItems.map(([label, value], index) => `<div><span>${label}</span><strong class="${index === 1 || index === 2 ? trendClass(selected.change) : ""}">${value}</strong></div>`).join("");
+
+  const kCtx = els.proKChart.getContext("2d");
+  kCtx.clearRect(0, 0, els.proKChart.width, els.proKChart.height);
+  drawCandlestickChart(kCtx, els.proKChart.width, els.proKChart.height, rows);
+
+  const decisionTone = risk >= 70 ? "高風險" : trend >= 62 ? "偏多觀察" : trend <= 38 ? "偏空防守" : "中性等待";
+  els.proDecisionCore.innerHTML = `
+    <div class="proDecisionBadge ${risk >= 70 ? "danger" : trend >= 58 ? "positive" : "caution"}">${decisionTone}</div>
+    <dl><div><dt>趨勢判斷</dt><dd>${trend >= 58 ? "偏多" : trend <= 42 ? "偏空" : "盤整"}</dd></div><div><dt>量價狀態</dt><dd>${volumeRatio >= 0.7 ? "量能活躍" : "量能一般"}</dd></div><div><dt>市場廣度</dt><dd>${Math.round(breadth)} / 100</dd></div><div><dt>風險等級</dt><dd>${Math.round(risk)} / 100</dd></div></dl>`;
+  renderProBars(els.proMultiRead, [
+    { label: "趨勢", value: trend, tone: "red" }, { label: "動能", value: momentum, tone: "yellow" },
+    { label: "量能", value: volumeRatio * 100, tone: "green" }, { label: "市場廣度", value: breadth, tone: "blue" },
+    { label: "穩定度", value: 100 - risk, tone: "cyan" },
+  ]);
+
+  const heat = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 10);
+  els.proHeatMap.innerHTML = heat.map((quote) => {
+    const quoteChange = Number(quote.changePercent || 0);
+    const intensity = clamp(Math.abs(quoteChange) / 6, 0.18, 1);
+    return `<div class="heatCell ${quoteChange >= 0 ? "hot" : "cold"}" style="--heat:${intensity}"><strong>${quote.symbol}</strong><span>${pct(quoteChange)}</span><small>${intFmt(quote.volume)}</small></div>`;
+  }).join("");
+  renderProBars(els.proRiskRadar, [
+    { label: "價格波動", value: risk, tone: "red" }, { label: "量能集中", value: volumeRatio * 100, tone: "yellow" },
+    { label: "趨勢反轉", value: 100 - trend, tone: "green" }, { label: "隔日沖推估", value: clamp(risk * 0.72 + volumeRatio * 20, 0, 100), tone: "red" },
+  ]);
+
+  const closeValues = rows.map((row) => Number(row.close)).filter(Number.isFinite);
+  const predCtx = els.proPredictionChart.getContext("2d");
+  predCtx.clearRect(0, 0, els.proPredictionChart.width, els.proPredictionChart.height);
+  predCtx.fillStyle = "#05080d";
+  predCtx.fillRect(0, 0, els.proPredictionChart.width, els.proPredictionChart.height);
+  drawLine(predCtx, els.proPredictionChart.width, els.proPredictionChart.height, closeValues, rows.map((row) => chartLabel(row.date)), "#ffd84d", true, true);
+
+  els.proCapitalFlow.innerHTML = [...valid].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0)).slice(0, 7).map((quote) => `
+    <div class="capitalRow"><strong>${quote.symbol}</strong><span>${quote.name || "-"}</span><i class="${trendClass(quote.change)}">${pct(quote.changePercent)}</i><b>${intFmt(quote.volume)}</b></div>`).join("");
+  els.proValuation.innerHTML = `<dl><div><dt>本益比</dt><dd>${ratioFmt(selected.peRatio)}</dd></div><div><dt>殖利率</dt><dd>${pct(selected.dividendYield)}</dd></div><div><dt>目前價格</dt><dd>${fmt(selected.price)}</dd></div><div><dt>相對昨收</dt><dd class="${trendClass(selected.change)}">${pct(selected.changePercent)}</dd></div></dl>`;
+  renderProBars(els.proConfidence, [
+    { label: "AI 信心", value: confidence, tone: "blue" }, { label: "資料完整", value: clamp(rows.length / 60 * 100, 20, 100), tone: "cyan" },
+    { label: "訊號穩定", value: 100 - risk, tone: "green" }, { label: "策略適用", value: avg([confidence, 100 - risk]), tone: "yellow" },
+  ]);
+
+  const sectorMap = new Map();
+  valid.forEach((quote) => {
+    const sector = primarySector(quote.symbol);
+    const item = sectorMap.get(sector) || { name: sector, change: 0, volume: 0, count: 0 };
+    item.change += Number(quote.changePercent || 0);
+    item.volume += Number(quote.volume || 0);
+    item.count += 1;
+    sectorMap.set(sector, item);
+  });
+  const sectors = [...sectorMap.values()].map((item) => ({ ...item, score: item.change / item.count })).sort((a, b) => b.score - a.score);
+  const maxSectorVolume = Math.max(1, ...sectors.map((item) => item.volume));
+  els.proSectorFlow.innerHTML = sectors.slice(0, 7).map((item) => `<div class="sectorFlowRow"><span>${item.name}</span><div><i class="${item.score >= 0 ? "in" : "out"}" style="width:${clamp(item.volume / maxSectorVolume * 100, 8, 100)}%"></i></div><strong class="${trendClass(item.score)}">${item.score >= 0 ? "+" : ""}${fmt(item.score)}%</strong></div>`).join("");
+  els.proConclusion.innerHTML = `<strong>${selected.symbol} ${selected.name || ""}：${decisionTone}</strong><p>目前趨勢 ${Math.round(trend)} 分、動能 ${Math.round(momentum)} 分、風險 ${Math.round(risk)} 分，市場上漲家數比重 ${Math.round(breadth)}%。</p><p>${sectors[0] ? `${sectors[0].name}為目前相對強勢板塊。` : "板塊資料累積中。"} 本頁為規則式觀測，不構成投資建議。</p>`;
+}
+
+function setProDashboard(open) {
+  els.appMain.classList.toggle("proMode", open);
+  els.proDashboardPanel.classList.toggle("hidden", !open);
+  els.proDashboardToggle.textContent = open ? "返回原儀表板" : "綜合儀表板";
+  els.proDashboardToggle.classList.toggle("primary", open);
+  if (open) {
+    renderProDashboard();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function exportDashboardCsv() {
+  const headers = ["代號", "名稱", "市場", "成交價", "昨收", "本益比", "殖利率", "漲跌", "漲跌幅", "成交量", "時間"];
+  const rows = state.quotes.map((quote) => [quote.symbol, quote.name, quote.market, quote.price, quote.previousClose, quote.peRatio, quote.dividendYield, quote.change, quote.changePercent, quote.volume, quote.tradeTime]);
+  const csv = [headers, ...rows].map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+  link.download = `台股綜合儀表板-${localDateKey(new Date())}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 function renderDashboard() {
   const valid = state.quotes.filter((quote) => quote.status === "ok");
   const selected = state.quotes.find((quote) => quote.symbol === selectedSymbol()) || valid[0] || {};
@@ -1118,6 +1255,7 @@ function renderDashboard() {
     <p>選定標的：${selected.symbol || "-"} ${selected.name || ""} / 漲跌幅 ${pct(selected.changePercent)} / 量能熱度 ${Math.round(volume)}。</p>
     <p>本儀表板為規則式分析，不構成投資建議。</p>
   `;
+  renderProDashboard();
 }
 
 async function loadSettings() {
@@ -1190,8 +1328,13 @@ els.refreshBtn.addEventListener("click", async () => {
   finally { els.refreshBtn.disabled = false; }
 });
 
-els.settingsToggle.addEventListener("click", () => els.settingsPanel.classList.toggle("hidden"));
+els.proDashboardToggle.addEventListener("click", () => setProDashboard(!els.appMain.classList.contains("proMode")));
+els.settingsToggle.addEventListener("click", () => {
+  setProDashboard(false);
+  els.settingsPanel.classList.toggle("hidden");
+});
 els.usersToggle.addEventListener("click", async () => {
+  setProDashboard(false);
   if (!state.user || state.user.role !== "admin") {
     els.usersPanel.classList.add("hidden");
     return;
@@ -1201,6 +1344,13 @@ els.usersToggle.addEventListener("click", async () => {
 });
 els.chartSymbol.addEventListener("change", renderDashboard);
 els.chartRange.addEventListener("change", renderDashboard);
+els.proSymbol.addEventListener("change", () => {
+  if ([...els.chartSymbol.options].some((option) => option.value === els.proSymbol.value)) els.chartSymbol.value = els.proSymbol.value;
+  if ([...els.singleStockSymbol.options].some((option) => option.value === els.proSymbol.value)) els.singleStockSymbol.value = els.proSymbol.value;
+  renderDashboard();
+});
+els.proExportCsv.addEventListener("click", exportDashboardCsv);
+els.proPrint.addEventListener("click", () => window.print());
 els.singleStockSymbol.addEventListener("change", renderSingleStockChart);
 els.singleStockRange.addEventListener("change", renderSingleStockChart);
 els.generateRecommendationBtn.addEventListener("click", generateRecommendations);

@@ -543,6 +543,7 @@ main.etfMode > :not(#etfAnalysisPanel) { display: none !important; }
 .etfRisk dl div, .etfFacts dl div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid rgba(53, 139, 166, .22); padding: 8px 0; font-size: 11px; }
 .etfRisk dt, .etfFacts dt { color: #7795aa; }
 .etfRisk dd, .etfFacts dd { margin: 0; color: #e0edf6; font-weight: 800; text-align: right; }
+#etfIncome dd small { display: block; margin-top: 3px; color: #6f91a5; font-size: 9px; font-weight: 500; }
 #etfDrawdownChart { height: 185px; object-fit: fill; }
 .etfNote, .etfMiniMeta { margin-top: 9px; color: #7696aa; font-size: 10px; line-height: 1.5; }
 .etfProfile { display: grid; gap: 13px; }

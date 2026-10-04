@@ -1330,6 +1330,8 @@ function etfAnalytics(rows, quote, profile) {
 function renderEtfAnalysis(payload) {
   const quote = payload.quote;
   const profile = payload.profile || {};
+  const distributions = payload.distributions || {};
+  const latestDistribution = distributions.latest || null;
   const rows = [...(payload.history || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   if (!rows.length || rows.at(-1).date !== quote.tradeDate) {
     rows.push({ date: quote.tradeDate, open: quote.open, high: quote.high, low: quote.low, close: quote.price, volume: quote.volume });
@@ -1372,7 +1374,10 @@ function renderEtfAnalysis(payload) {
   ]);
   els.etfLiquidity.innerHTML += `<p class="etfMiniMeta">20 日均量 ${intFmt(metrics.avgVolume20)} 張｜今日成交額估算 ${fmt(Number(quote.price || 0) * Number(quote.volume || 0) * 1000 / 100000000)} 億元</p>`;
 
-  els.etfIncome.innerHTML = `<dl><div><dt>近期待遇殖利率</dt><dd>${pct(quote.dividendYield)}</dd></div><div><dt>本益比觀測</dt><dd>${ratioFmt(quote.peRatio)}</dd></div><div><dt>配息頻率</dt><dd>待接官方資料</dd></div><div><dt>填息狀況</dt><dd>待接除息資料</dd></div></dl>`;
+  const latestDistributionText = latestDistribution
+    ? `${fmt(latestDistribution.amount)} 元 <small>除息 ${latestDistribution.exDividendDate}</small>`
+    : "尚無配息資料";
+  els.etfIncome.innerHTML = `<dl><div><dt>近期待遇殖利率</dt><dd>${pct(quote.dividendYield)}</dd></div><div><dt>本益比觀測</dt><dd>${ratioFmt(quote.peRatio)}</dd></div><div><dt>配息頻率</dt><dd>${distributions.frequency || "資料不足"}</dd></div><div><dt>最近一次配息</dt><dd>${latestDistributionText}</dd></div><div><dt>配息發放日</dt><dd>${latestDistribution?.paymentDate || "-"}</dd></div><div><dt>填息狀況</dt><dd>待接除息資料</dd></div></dl>`;
   els.etfFees.innerHTML = `<dl><div><dt>經理費</dt><dd>待接官方資料</dd></div><div><dt>保管費</dt><dd>待接官方資料</dd></div><div><dt>追蹤誤差</dt><dd>待接淨值資料</dd></div><div><dt>折溢價</dt><dd>待接即時淨值</dd></div></dl>`;
   els.etfProfile.innerHTML = `<div class="etfProfileLead"><span>策略類型</span><strong>${profile.strategy || "指數化配置"}</strong></div><div class="etfTags"><span>${profile.category || "ETF"}</span>${(profile.tags || []).map((tag) => `<span>${tag}</span>`).join("")}<span>風險 ${profile.riskLevel || 3}/5</span></div><p>分類依 ETF 名稱與代號進行規則式判讀，正式分類以公開說明書為準。</p>`;
   els.etfHoldings.innerHTML = `<strong>成分股與集中度資料尚待官方資料源</strong><p>完成串接後將顯示前十大持股、產業配置、單一成分集中度及與其他 ETF 的重疊率。</p><div><span>前十大持股</span><span>產業配置</span><span>持股重疊率</span></div>`;

@@ -12,7 +12,7 @@ const {
   clearCookie,
   json,
 } = require("../../src/auth-supabase");
-const { normalizeSymbols, fetchRealtimeQuotes, fetchHistoricalSeries, buildRuleSummary, classifyEtf } = require("../../src/stocks");
+const { normalizeSymbols, fetchRealtimeQuotes, fetchHistoricalSeries, fetchEtfDistributions, buildRuleSummary, classifyEtf } = require("../../src/stocks");
 
 const DEFAULT_SYMBOLS = ["2330", "2317", "0050", "2454", "2412", "2308", "2882", "3231", "3711", "3008"];
 
@@ -315,15 +315,18 @@ async function handler(event) {
     if (!quote || quote.status !== "ok") throw new Error("查無此 ETF，請確認代號或上市市場。");
     const historyMap = await fetchHistoricalSeries([symbol], { [symbol]: quote.market });
     const history = historyMap[symbol] || [];
+    const distributions = await fetchEtfDistributions(symbol);
     return json(200, {
       ok: true,
       updatedAt: new Date().toISOString(),
       quote,
       history,
+      distributions,
       profile: classifyEtf(symbol, quote.name),
       disclosures: {
         officialFundData: false,
-        note: "本頁價格與日線來自公開行情；淨值、費用與成分股欄位須另接官方基金資料。",
+        officialDistributionData: true,
+        note: "配息資料來自證交所 ETF 收益分配；價格與日線來自公開行情，淨值、費用與成分股欄位須另接官方基金資料。",
       },
     }, { "Cache-Control": "private, max-age=180" });
   }

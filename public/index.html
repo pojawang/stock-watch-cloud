@@ -27,6 +27,7 @@
       <span id="userBadge" class="userBadge">-</span>
       <button id="refreshBtn" class="primary">立即刷新</button>
       <button id="proDashboardToggle">綜合儀表板</button>
+      <button id="etfAnalysisToggle">ETF 分析</button>
       <button id="settingsToggle">投資建議</button>
       <button id="usersToggle" class="hidden">帳號管理</button>
       <button id="logoutBtn">登出</button>
@@ -86,6 +87,88 @@
         <button id="saveSettingsBtn" class="primary">儲存並更新儀表板</button>
       </div>
       <p id="settingsMessage" class="message"></p>
+    </section>
+
+    <section id="etfAnalysisPanel" class="etfAnalysisPanel hidden">
+      <div class="etfSearchBand">
+        <div>
+          <span class="etfEyebrow">ETF RESEARCH DESK</span>
+          <h2>ETF 全面健檢</h2>
+          <p>輸入台灣 ETF 代號，檢視報酬、風險、量能與配置適合度。</p>
+        </div>
+        <form id="etfSearchForm" class="etfSearchForm">
+          <label for="etfSymbolInput">ETF 代號</label>
+          <div>
+            <input id="etfSymbolInput" inputmode="text" maxlength="7" placeholder="例如 0050、00878" value="0050" required>
+            <button id="etfAnalyzeBtn" class="primary" type="submit">開始分析</button>
+          </div>
+          <small id="etfSearchMessage">支援上市及上櫃台灣 ETF。</small>
+        </form>
+      </div>
+
+      <div id="etfResult" class="etfResult hidden">
+        <div class="etfIdentityBar">
+          <div class="etfIdentity">
+            <span id="etfCode">-</span>
+            <div><h2 id="etfName">-</h2><p id="etfCategory">-</p></div>
+          </div>
+          <div id="etfHeadlineStats" class="etfHeadlineStats"></div>
+          <div class="etfUpdated"><span>資料時間</span><strong id="etfUpdatedAt">-</strong></div>
+        </div>
+
+        <div class="etfGrid">
+          <article class="etfCard etfSpan8">
+            <div class="etfCardHead"><span>01</span><h3>價格、K 線與成交量</h3><small>近三個月</small></div>
+            <canvas id="etfPriceChart" width="1100" height="620"></canvas>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>02</span><h3>期間績效</h3></div>
+            <div id="etfPerformance" class="etfPerformance"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>03</span><h3>風險健檢</h3></div>
+            <div id="etfRisk" class="etfRisk"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>04</span><h3>最大回撤軌跡</h3></div>
+            <canvas id="etfDrawdownChart" width="640" height="300"></canvas>
+            <div id="etfDrawdownText" class="etfNote"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>05</span><h3>流動性觀測</h3></div>
+            <div id="etfLiquidity" class="etfMeters"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>06</span><h3>配息與估值</h3></div>
+            <div id="etfIncome" class="etfFacts"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>07</span><h3>費用與追蹤品質</h3></div>
+            <div id="etfFees" class="etfFacts"></div>
+          </article>
+          <article class="etfCard etfSpan5">
+            <div class="etfCardHead"><span>08</span><h3>投資策略與風險標籤</h3></div>
+            <div id="etfProfile" class="etfProfile"></div>
+          </article>
+          <article class="etfCard etfSpan7">
+            <div class="etfCardHead"><span>09</span><h3>成分與集中度</h3><small>官方基金資料</small></div>
+            <div id="etfHoldings" class="etfDataNotice"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>10</span><h3>趨勢技術面</h3></div>
+            <div id="etfTechnical" class="etfMeters"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>11</span><h3>投資者適配度</h3></div>
+            <div id="etfSuitability" class="etfDonutGrid"></div>
+          </article>
+          <article class="etfCard etfSpan4">
+            <div class="etfCardHead"><span>12</span><h3>規則式 AI 摘要</h3></div>
+            <div id="etfSummary" class="etfSummary"></div>
+          </article>
+        </div>
+        <p class="etfDisclaimer">本頁為資料整理與規則式分析，不構成投資建議。ETF 淨值、費用、配息及成分資料應以投信與交易所最新公告為準。</p>
+      </div>
     </section>
 
     <section id="usersPanel" class="panel hidden">
@@ -313,6 +396,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=15"></script>
+  <script src="/app.js?v=16"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ const {
   clearCookie,
   json,
 } = require("../../src/auth-supabase");
-const { normalizeSymbols, fetchRealtimeQuotes, fetchHistoricalSeries, buildRuleSummary } = require("../../src/stocks");
+const { normalizeSymbols, fetchRealtimeQuotes, fetchHistoricalSeries, buildRuleSummary, classifyEtf } = require("../../src/stocks");
 
 const DEFAULT_SYMBOLS = ["2330", "2317", "0050", "2454", "2412", "2308", "2882", "3231", "3711", "3008"];
 
@@ -304,6 +304,28 @@ async function handler(event) {
     const auth = await requireUser(event);
     if (auth.response) return auth.response;
     return json(200, await historyForUser(auth.user.id), { "Cache-Control": "private, max-age=300" });
+  }
+
+  if (method === "GET" && path === "/etf") {
+    const auth = await requireUser(event);
+    if (auth.response) return auth.response;
+    const symbol = String(event.queryStringParameters?.symbol || "").trim().toUpperCase();
+    if (!/^\d{4,6}[A-Z]?$/.test(symbol)) throw new Error("請輸入有效的台灣 ETF 代號。");
+    const quote = (await fetchRealtimeQuotes([symbol]))[0];
+    if (!quote || quote.status !== "ok") throw new Error("查無此 ETF，請確認代號或上市市場。");
+    const historyMap = await fetchHistoricalSeries([symbol], { [symbol]: quote.market });
+    const history = historyMap[symbol] || [];
+    return json(200, {
+      ok: true,
+      updatedAt: new Date().toISOString(),
+      quote,
+      history,
+      profile: classifyEtf(symbol, quote.name),
+      disclosures: {
+        officialFundData: false,
+        note: "本頁價格與日線來自公開行情；淨值、費用與成分股欄位須另接官方基金資料。",
+      },
+    }, { "Cache-Control": "private, max-age=180" });
   }
 
   return json(404, { ok: false, error: "找不到 API。" });

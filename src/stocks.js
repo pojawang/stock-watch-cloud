@@ -17,8 +17,48 @@ function firstQuotePrice(value) {
 
 function normalizeSymbols(symbols) {
   return [...new Set((symbols || [])
-    .map((symbol) => String(symbol).trim())
-    .filter((symbol) => /^\d{4,6}$/.test(symbol)))];
+    .map((symbol) => String(symbol).trim().toUpperCase())
+    .filter((symbol) => /^\d{4,6}[A-Z]?$/.test(symbol)))];
+}
+
+function classifyEtf(symbol, name = "") {
+  const text = `${symbol} ${name}`;
+  let category = "股票型 ETF";
+  let strategy = "指數化配置";
+  let riskLevel = 3;
+  const tags = [];
+  if (/債|公司債|公債|投資級|非投等/.test(text)) {
+    category = "債券型 ETF";
+    strategy = "債券收益配置";
+    riskLevel = 2;
+    tags.push("利率風險", "信用風險");
+  } else if (/高股息|高息|股利|收益/.test(text)) {
+    category = "高股息 ETF";
+    strategy = "股息收益與因子選股";
+    riskLevel = 3;
+    tags.push("配息波動", "成分集中");
+  } else if (/科技|半導體|AI|5G|電動車/.test(text)) {
+    category = "產業主題 ETF";
+    strategy = "科技與成長產業配置";
+    riskLevel = 4;
+    tags.push("產業集中", "高波動");
+  } else if (/50|市值|大型|加權/.test(text)) {
+    category = "市值型 ETF";
+    strategy = "大型權值股配置";
+    riskLevel = 3;
+    tags.push("權值股集中", "市場風險");
+  }
+  if (/正2|反1|槓桿|反向/.test(text)) {
+    category = "槓桿／反向 ETF";
+    strategy = "短期策略交易";
+    riskLevel = 5;
+    tags.push("複利偏離", "不宜長期持有");
+  }
+  if (/[A-Z]$/.test(symbol) || /主動/.test(text)) {
+    strategy = "主動式選股策略";
+    tags.push("經理人風險");
+  }
+  return { category, strategy, riskLevel, tags: [...new Set(tags)] };
 }
 
 function formatTradeDate(value) {
@@ -294,4 +334,5 @@ module.exports = {
   fetchRealtimeQuotes,
   fetchHistoricalSeries,
   buildRuleSummary,
+  classifyEtf,
 };

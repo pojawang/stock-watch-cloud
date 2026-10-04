@@ -84,6 +84,29 @@ function rocDateKey(value) {
   return `${Number(match[1]) + 1911}-${String(match[2]).padStart(2, "0")}-${String(match[3]).padStart(2, "0")}`;
 }
 
+function rocTextDateKey(value) {
+  const match = String(value || "").trim().match(/^(\d{2,3})年(\d{1,2})月(\d{1,2})日$/);
+  if (!match) return null;
+  return `${Number(match[1]) + 1911}-${String(match[2]).padStart(2, "0")}-${String(match[3]).padStart(2, "0")}`;
+}
+
+function inferDistributionFrequency(distributions) {
+  const dates = distributions
+    .map((item) => Date.parse(`${item.exDividendDate}T00:00:00+08:00`))
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a)
+    .slice(0, 8);
+  if (dates.length < 2) return dates.length ? "資料不足" : "未配息／資料不足";
+  const gaps = dates.slice(0, -1).map((date, index) => (date - dates[index + 1]) / 86400000).sort((a, b) => a - b);
+  const middle = Math.floor(gaps.length / 2);
+  const medianGap = gaps.length % 2 ? gaps[middle] : (gaps[middle - 1] + gaps[middle]) / 2;
+  if (medianGap <= 45) return "月配";
+  if (medianGap <= 120) return "季配";
+  if (medianGap <= 220) return "半年配";
+  if (medianGap <= 420) return "年配";
+  return "不定期配息";
+}
+
 async function fetchJsonWithTimeout(url, timeoutMs = 3500) {
   const controller = new AbortController();
   const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
@@ -181,6 +204,40 @@ async function fetchHistoricalSeries(symbols, marketHints = {}) {
     }
   }));
   return Object.fromEntries(entries);
+}
+
+async function fetchEtfDistributions(symbol) {
+  const cleanSymbol = normalizeSymbols([symbol])[0];
+  if (!cleanSymbol) return { frequency: "資料不足", latest: null, history: [], source: "TWSE ETF distribution" };
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date()).replaceAll("-", "");
+  const currentYear = Number(today.slice(0, 4));
+  const startDate = `${currentYear - 5}0101`;
+  const url = `https://www.twse.com.tw/rwd/zh/ETF/etfDiv?stkNo=${encodeURIComponent(cleanSymbol)}&startDate=${startDate}&endDate=${today}&response=json`;
+  try {
+    const payload = await fetchJsonWithTimeout(url, 5500);
+    const history = (Array.isArray(payload?.data) ? payload.data : []).map((row) => ({
+      symbol: String(row?.[0] || "").trim(),
+      name: String(row?.[1] || "").trim(),
+      exDividendDate: rocTextDateKey(row?.[2]),
+      recordDate: rocTextDateKey(row?.[3]),
+      paymentDate: rocTextDateKey(row?.[4]),
+      amount: toNumber(row?.[5]),
+    })).filter((item) => item.symbol === cleanSymbol && item.exDividendDate && item.amount !== null)
+      .sort((a, b) => b.exDividendDate.localeCompare(a.exDividendDate));
+    return {
+      frequency: inferDistributionFrequency(history),
+      latest: history[0] || null,
+      history: history.slice(0, 12),
+      source: "TWSE ETF distribution",
+    };
+  } catch (_) {
+    return { frequency: "資料暫時無法取得", latest: null, history: [], source: "TWSE ETF distribution" };
+  }
 }
 
 async function fetchFundamentalMetrics(symbols) {
@@ -333,6 +390,7 @@ module.exports = {
   normalizeSymbols,
   fetchRealtimeQuotes,
   fetchHistoricalSeries,
+  fetchEtfDistributions,
   buildRuleSummary,
   classifyEtf,
 };

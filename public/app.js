@@ -3,6 +3,7 @@ const state = {
   symbols: [],
   quotes: [],
   history: { snapshots: [] },
+  etf: null,
   refreshTimer: null,
 };
 
@@ -150,6 +151,31 @@ const els = {
   proConclusion: $("#proConclusion"),
   proExportCsv: $("#proExportCsv"),
   proPrint: $("#proPrint"),
+  etfAnalysisToggle: $("#etfAnalysisToggle"),
+  etfAnalysisPanel: $("#etfAnalysisPanel"),
+  etfSearchForm: $("#etfSearchForm"),
+  etfSymbolInput: $("#etfSymbolInput"),
+  etfAnalyzeBtn: $("#etfAnalyzeBtn"),
+  etfSearchMessage: $("#etfSearchMessage"),
+  etfResult: $("#etfResult"),
+  etfCode: $("#etfCode"),
+  etfName: $("#etfName"),
+  etfCategory: $("#etfCategory"),
+  etfHeadlineStats: $("#etfHeadlineStats"),
+  etfUpdatedAt: $("#etfUpdatedAt"),
+  etfPriceChart: $("#etfPriceChart"),
+  etfPerformance: $("#etfPerformance"),
+  etfRisk: $("#etfRisk"),
+  etfDrawdownChart: $("#etfDrawdownChart"),
+  etfDrawdownText: $("#etfDrawdownText"),
+  etfLiquidity: $("#etfLiquidity"),
+  etfIncome: $("#etfIncome"),
+  etfFees: $("#etfFees"),
+  etfProfile: $("#etfProfile"),
+  etfHoldings: $("#etfHoldings"),
+  etfTechnical: $("#etfTechnical"),
+  etfSuitability: $("#etfSuitability"),
+  etfSummary: $("#etfSummary"),
 };
 
 function fmt(value, digits = 2) {
@@ -223,6 +249,7 @@ function showLogin(message = "") {
   state.user = null;
   if (state.refreshTimer) window.clearInterval(state.refreshTimer);
   setProDashboard(false);
+  setEtfAnalysis(false);
   els.loginView.classList.remove("hidden");
   els.appHeader.classList.add("hidden");
   els.appMain.classList.add("hidden");
@@ -1262,13 +1289,150 @@ function renderProDashboard() {
   els.proConclusion.innerHTML = `<div class="proVerdict"><span>主力語意</span><strong>${mainForce >= 65 ? "積極承接" : mainForce <= 38 ? "調節減碼" : "中性觀察"}</strong></div><div class="proVerdictTags"><span>${risk >= 65 ? "高波動" : "風險可控"}</span><span>${trend >= 55 ? "趨勢偏多" : "趨勢整理"}</span><span>${confidence >= 60 ? "信心較高" : "等待確認"}</span></div><p>${selected.symbol} ${selected.name || ""}目前趨勢 ${Math.round(trend)} 分、主力動能 ${Math.round(mainForce)} 分、風險 ${Math.round(risk)} 分；${strongest ? `${strongest.name}為相對強勢板塊。` : "板塊資料累積中。"}</p><small>本頁依即時報價與歷史快照進行規則式推估，不構成投資建議；法人數值並非交易所正式買賣超。</small>`;
 }
 
+function etfPeriodReturn(rows, sessions) {
+  if (rows.length < 2) return null;
+  const end = Number(rows.at(-1).close);
+  const start = Number(rows[Math.max(0, rows.length - 1 - sessions)].close);
+  return start ? (end - start) / start * 100 : null;
+}
+
+function etfAnalytics(rows, quote, profile) {
+  const closes = rows.map((row) => Number(row.close)).filter(Number.isFinite);
+  const returns = closes.slice(1).map((value, index) => closes[index] ? value / closes[index] - 1 : 0);
+  const mean = returns.length ? avg(returns) : 0;
+  const variance = returns.length ? avg(returns.map((value) => (value - mean) ** 2)) : 0;
+  const dailyVol = Math.sqrt(variance);
+  const annualVol = dailyVol * Math.sqrt(252) * 100;
+  const sharpe = dailyVol ? mean / dailyVol * Math.sqrt(252) : 0;
+  let peak = closes[0] || Number(quote.price || 0);
+  let maxDrawdown = 0;
+  const drawdowns = closes.map((close) => {
+    peak = Math.max(peak, close);
+    const value = peak ? (close - peak) / peak * 100 : 0;
+    maxDrawdown = Math.min(maxDrawdown, value);
+    return value;
+  });
+  const volumes = rows.map((row) => Number(row.volume || 0) / 1000).filter(Number.isFinite);
+  const avgVolume20 = avg(volumes.slice(-20));
+  const currentVolumeLots = Number(quote.volume || volumes.at(-1) || 0);
+  const volumeRatio = avgVolume20 ? currentVolumeLots / avgVolume20 : 0;
+  const ma = (length) => avg(closes.slice(-length));
+  const ma5 = ma(5);
+  const ma20 = ma(20);
+  const ma60 = ma(60);
+  const price = Number(quote.price || closes.at(-1) || 0);
+  const trendScore = clamp(50 + (ma20 ? (price - ma20) / ma20 * 350 : 0) + (ma5 > ma20 ? 12 : -8), 0, 100);
+  const riskScore = clamp(annualVol * 1.8 + Math.abs(maxDrawdown) * 2 + Number(profile.riskLevel || 3) * 5, 0, 100);
+  const liquidityScore = clamp(Math.log10(Math.max(1, avgVolume20)) * 17 + Math.min(20, volumeRatio * 8), 0, 100);
+  return { closes, returns, annualVol, sharpe, maxDrawdown, drawdowns, avgVolume20, volumeRatio, ma5, ma20, ma60, price, trendScore, riskScore, liquidityScore };
+}
+
+function renderEtfAnalysis(payload) {
+  const quote = payload.quote;
+  const profile = payload.profile || {};
+  const rows = [...(payload.history || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!rows.length || rows.at(-1).date !== quote.tradeDate) {
+    rows.push({ date: quote.tradeDate, open: quote.open, high: quote.high, low: quote.low, close: quote.price, volume: quote.volume });
+  }
+  const metrics = etfAnalytics(rows, quote, profile);
+  const periods = [["一週", 5], ["一個月", 22], ["三個月", 66], ["半年", 126], ["一年", 252]];
+  const periodResults = periods.map(([label, sessions]) => [label, rows.length > Math.min(sessions, 66) || sessions <= 66 ? etfPeriodReturn(rows, sessions) : null]);
+  const changeClass = trendClass(quote.changePercent);
+  els.etfResult.classList.remove("hidden");
+  els.etfCode.textContent = quote.symbol;
+  els.etfName.textContent = quote.name || "ETF";
+  els.etfCategory.textContent = `${profile.category || "ETF"}｜${profile.strategy || "指數化配置"}`;
+  els.etfUpdatedAt.textContent = `${quote.tradeDate || "-"} ${quote.tradeTime || "-"}`;
+  els.etfHeadlineStats.innerHTML = [
+    ["成交價", fmt(quote.price), ""], ["漲跌幅", pct(quote.changePercent), changeClass],
+    ["成交量", intFmt(quote.volume), ""], ["昨收", fmt(quote.previousClose), ""],
+  ].map(([label, value, cls]) => `<div><span>${label}</span><strong class="${cls}">${value}</strong></div>`).join("");
+
+  const priceCtx = els.etfPriceChart.getContext("2d");
+  priceCtx.clearRect(0, 0, els.etfPriceChart.width, els.etfPriceChart.height);
+  drawCandlestickChart(priceCtx, els.etfPriceChart.width, els.etfPriceChart.height, rows.slice(-66));
+
+  els.etfPerformance.innerHTML = periodResults.map(([label, value]) => {
+    const magnitude = value === null ? 0 : clamp(Math.abs(value) * 8, 4, 100);
+    return `<div class="etfReturnRow"><span>${label}</span><div><i class="${trendClass(value)}" style="width:${magnitude}%"></i></div><strong class="${trendClass(value)}">${value === null ? "資料不足" : pct(value)}</strong></div>`;
+  }).join("");
+  els.etfPerformance.innerHTML += `<p>目前日線資料 ${rows.length} 筆；半年與一年需持續擴充歷史資料。</p>`;
+
+  els.etfRisk.innerHTML = `<div class="etfRiskScore" style="--score:${Math.round(metrics.riskScore)}"><span>風險分數</span><strong>${Math.round(metrics.riskScore)}</strong><small>/100</small></div><dl><div><dt>年化波動率</dt><dd>${pct(metrics.annualVol)}</dd></div><div><dt>最大回撤</dt><dd class="down">${pct(metrics.maxDrawdown)}</dd></div><div><dt>夏普值估算</dt><dd>${fmt(metrics.sharpe)}</dd></div><div><dt>商品風險級別</dt><dd>${profile.riskLevel || 3} / 5</dd></div></dl>`;
+  const ddCtx = els.etfDrawdownChart.getContext("2d");
+  ddCtx.clearRect(0, 0, els.etfDrawdownChart.width, els.etfDrawdownChart.height);
+  ddCtx.fillStyle = "#061016"; ddCtx.fillRect(0, 0, els.etfDrawdownChart.width, els.etfDrawdownChart.height);
+  drawLine(ddCtx, els.etfDrawdownChart.width, els.etfDrawdownChart.height, metrics.drawdowns, rows.map((row) => chartLabel(row.date)), "#ff6a62", true);
+  els.etfDrawdownText.textContent = `近 ${rows.length} 個交易日最大回撤 ${pct(metrics.maxDrawdown)}。`;
+
+  renderProBars(els.etfLiquidity, [
+    { label: "流動性分數", value: metrics.liquidityScore, tone: "cyan" },
+    { label: "今日量／20日均量", value: clamp(metrics.volumeRatio * 50, 0, 100), text: `${fmt(metrics.volumeRatio)} 倍`, tone: "yellow" },
+    { label: "成交量穩定度", value: clamp(100 - Math.abs(metrics.volumeRatio - 1) * 40, 0, 100), tone: "green" },
+  ]);
+  els.etfLiquidity.innerHTML += `<p class="etfMiniMeta">20 日均量 ${intFmt(metrics.avgVolume20)} 張｜今日成交額估算 ${fmt(Number(quote.price || 0) * Number(quote.volume || 0) * 1000 / 100000000)} 億元</p>`;
+
+  els.etfIncome.innerHTML = `<dl><div><dt>近期待遇殖利率</dt><dd>${pct(quote.dividendYield)}</dd></div><div><dt>本益比觀測</dt><dd>${ratioFmt(quote.peRatio)}</dd></div><div><dt>配息頻率</dt><dd>待接官方資料</dd></div><div><dt>填息狀況</dt><dd>待接除息資料</dd></div></dl>`;
+  els.etfFees.innerHTML = `<dl><div><dt>經理費</dt><dd>待接官方資料</dd></div><div><dt>保管費</dt><dd>待接官方資料</dd></div><div><dt>追蹤誤差</dt><dd>待接淨值資料</dd></div><div><dt>折溢價</dt><dd>待接即時淨值</dd></div></dl>`;
+  els.etfProfile.innerHTML = `<div class="etfProfileLead"><span>策略類型</span><strong>${profile.strategy || "指數化配置"}</strong></div><div class="etfTags"><span>${profile.category || "ETF"}</span>${(profile.tags || []).map((tag) => `<span>${tag}</span>`).join("")}<span>風險 ${profile.riskLevel || 3}/5</span></div><p>分類依 ETF 名稱與代號進行規則式判讀，正式分類以公開說明書為準。</p>`;
+  els.etfHoldings.innerHTML = `<strong>成分股與集中度資料尚待官方資料源</strong><p>完成串接後將顯示前十大持股、產業配置、單一成分集中度及與其他 ETF 的重疊率。</p><div><span>前十大持股</span><span>產業配置</span><span>持股重疊率</span></div>`;
+
+  renderProBars(els.etfTechnical, [
+    { label: "趨勢分數", value: metrics.trendScore, tone: metrics.trendScore >= 50 ? "red" : "green" },
+    { label: "MA5 相對位置", value: clamp(50 + (metrics.ma5 ? (metrics.price - metrics.ma5) / metrics.ma5 * 500 : 0), 0, 100), text: fmt(metrics.ma5), tone: "yellow" },
+    { label: "MA20 相對位置", value: clamp(50 + (metrics.ma20 ? (metrics.price - metrics.ma20) / metrics.ma20 * 500 : 0), 0, 100), text: fmt(metrics.ma20), tone: "blue" },
+    { label: "MA60 相對位置", value: clamp(50 + (metrics.ma60 ? (metrics.price - metrics.ma60) / metrics.ma60 * 500 : 0), 0, 100), text: fmt(metrics.ma60), tone: "cyan" },
+  ]);
+  const longTerm = profile.riskLevel >= 5 ? 25 : clamp(85 - metrics.riskScore * 0.45, 25, 90);
+  const income = clamp(Number(quote.dividendYield || 0) * 12 + (profile.category?.includes("高股息") ? 30 : 0), 10, 95);
+  const trading = clamp(avg([metrics.liquidityScore, metrics.trendScore, 100 - metrics.riskScore * 0.35]), 10, 95);
+  els.etfSuitability.innerHTML = proDonut("長期配置", longTerm, "#58d99a") + proDonut("收益領息", income, "#ffd45f") + proDonut("波段交易", trading, "#57bfe8");
+  const overall = Math.round(avg([100 - metrics.riskScore, metrics.liquidityScore, metrics.trendScore, longTerm]));
+  els.etfSummary.innerHTML = `<div class="etfSummaryGrade"><span>ETF 健康分數</span><strong>${overall}</strong><small>/100</small></div><h4>${metrics.trendScore >= 60 ? "趨勢偏強，留意追價風險" : metrics.trendScore <= 40 ? "趨勢偏弱，等待止穩" : "趨勢整理，適合分批觀察"}</h4><ul><li>${metrics.riskScore >= 65 ? "波動與回撤風險較高。" : "近期風險仍在可觀察範圍。"}</li><li>${metrics.liquidityScore >= 60 ? "成交流動性相對充足。" : "成交量偏低，需留意買賣價差。"}</li><li>${profile.strategy || "ETF 配置策略"}，適合度需配合持有期限。</li></ul>`;
+}
+
+async function loadEtfAnalysis(symbol) {
+  const clean = String(symbol || "").trim().toUpperCase();
+  if (!/^\d{4,6}[A-Z]?$/.test(clean)) throw new Error("請輸入有效的台灣 ETF 代號。");
+  els.etfAnalyzeBtn.disabled = true;
+  els.etfSearchMessage.textContent = `正在分析 ${clean}…`;
+  try {
+    const payload = await api(`/api/etf?symbol=${encodeURIComponent(clean)}`);
+    state.etf = payload;
+    els.etfSymbolInput.value = clean;
+    renderEtfAnalysis(payload);
+    els.etfSearchMessage.textContent = `${clean} 分析完成。`;
+  } finally {
+    els.etfAnalyzeBtn.disabled = false;
+  }
+}
+
 function setProDashboard(open) {
+  if (open) setEtfAnalysis(false);
   els.appMain.classList.toggle("proMode", open);
   els.proDashboardPanel.classList.toggle("hidden", !open);
   els.proDashboardToggle.textContent = open ? "返回原儀表板" : "綜合儀表板";
   els.proDashboardToggle.classList.toggle("primary", open);
   if (open) {
     renderProDashboard();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function setEtfAnalysis(open) {
+  if (open) {
+    els.appMain.classList.remove("proMode");
+    els.proDashboardPanel.classList.add("hidden");
+    els.proDashboardToggle.textContent = "綜合儀表板";
+    els.proDashboardToggle.classList.remove("primary");
+  }
+  els.appMain.classList.toggle("etfMode", open);
+  els.etfAnalysisPanel.classList.toggle("hidden", !open);
+  els.etfAnalysisToggle.textContent = open ? "返回原儀表板" : "ETF 分析";
+  els.etfAnalysisToggle.classList.toggle("primary", open);
+  if (open) {
+    if (state.etf) renderEtfAnalysis(state.etf);
+    else loadEtfAnalysis(els.etfSymbolInput.value).catch((error) => { els.etfSearchMessage.textContent = error.message; });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 }
@@ -1443,12 +1607,20 @@ els.refreshBtn.addEventListener("click", async () => {
 });
 
 els.proDashboardToggle.addEventListener("click", () => setProDashboard(!els.appMain.classList.contains("proMode")));
+els.etfAnalysisToggle.addEventListener("click", () => setEtfAnalysis(!els.appMain.classList.contains("etfMode")));
+els.etfSearchForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try { await loadEtfAnalysis(els.etfSymbolInput.value); }
+  catch (error) { els.etfSearchMessage.textContent = error.message; }
+});
 els.settingsToggle.addEventListener("click", () => {
   setProDashboard(false);
+  setEtfAnalysis(false);
   els.settingsPanel.classList.toggle("hidden");
 });
 els.usersToggle.addEventListener("click", async () => {
   setProDashboard(false);
+  setEtfAnalysis(false);
   if (!state.user || state.user.role !== "admin") {
     els.usersPanel.classList.add("hidden");
     return;
